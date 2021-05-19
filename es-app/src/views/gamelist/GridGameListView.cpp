@@ -310,6 +310,8 @@ void GridGameListView::updateInfoPanel()
 	bool fadingOut;
 	if(file == NULL)
 	{
+		LOG(LogDebug) << "GridGameListView::updateInfoPanel() : Clearing!";
+
 		mVideo->setVideo("");
 		mVideo->setImage("");
 		mVideoPlaying = false;
@@ -317,6 +319,8 @@ void GridGameListView::updateInfoPanel()
 		//mDescription.setText("");
 		fadingOut = true;
 	}else{
+		LOG(LogDebug) << "GridGameListView::updateInfoPanel() : Drawing!";
+
 		if (!mVideo->setVideo(file->getVideoPath()))
 		{
 			mVideo->setDefaultVideo();

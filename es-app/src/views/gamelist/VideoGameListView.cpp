@@ -246,11 +246,13 @@ void VideoGameListView::initMDValues()
 
 void VideoGameListView::updateInfoPanel()
 {
-	FileData* file = (mList.size() == 0 || mList.isScrolling()) ? NULL : mList.getSelected();
+	FileData* file = (mList.size() == 0 || (mList.getScrollingVelocity() != 0)) ? NULL : mList.getSelected();
 
 	bool fadingOut;
 	if(file == NULL)
 	{
+		LOG(LogDebug) << "VideoGameListView::updateInfoPanel() : Clearing!";
+
 		mVideo->setVideo("");
 		mVideo->setImage("");
 		mVideoPlaying = false;
@@ -259,6 +261,8 @@ void VideoGameListView::updateInfoPanel()
 		fadingOut = true;
 
 	}else{
+		LOG(LogDebug) << "VideoGameListView::updateInfoPanel() : Drawing!";
+
 		if (!mVideo->setVideo(file->getVideoPath()))
 		{
 			mVideo->setDefaultVideo();

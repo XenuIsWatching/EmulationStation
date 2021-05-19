@@ -212,15 +212,19 @@ void DetailedGameListView::initMDValues()
 
 void DetailedGameListView::updateInfoPanel()
 {
-	FileData* file = (mList.size() == 0 || mList.isScrolling()) ? NULL : mList.getSelected();
+	FileData* file = (mList.size() == 0 || (mList.getScrollingVelocity() != 0)) ? NULL : mList.getSelected();
 
 	bool fadingOut;
 	if(file == NULL)
 	{
+		LOG(LogDebug) << "DetailedGameListView::updateInfoPanel() : Clearing!";
+
 		//mImage.setImage("");
 		//mDescription.setText("");
 		fadingOut = true;
 	}else{
+		LOG(LogDebug) << "DetailedGameListView::updateInfoPanel() : Drawing!";
+
 		mThumbnail.setImage(file->getThumbnailPath());
 		mMarquee.setImage(file->getMarqueePath());
 		mImage.setImage(file->getImagePath());
