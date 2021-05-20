@@ -89,6 +89,7 @@ void SystemData::populateFolder(FileData* folder)
 	std::string filePath;
 	std::string extension;
 	bool isGame;
+	bool isMedia;
 	bool showHidden = Settings::getInstance()->getBool("ShowHiddenFiles");
 	Utils::FileSystem::stringList dirContent = Utils::FileSystem::getDirContent(folderPath);
 	for(Utils::FileSystem::stringList::const_iterator it = dirContent.cbegin(); it != dirContent.cend(); ++it)
@@ -107,6 +108,7 @@ void SystemData::populateFolder(FileData* folder)
 		//see issue #75: https://github.com/Aloshi/EmulationStation/issues/75
 
 		isGame = false;
+		isMedia = false;
 		if(std::find(mEnvData->mSearchExtensions.cbegin(), mEnvData->mSearchExtensions.cend(), extension) != mEnvData->mSearchExtensions.cend())
 		{
 			FileData* newGame = new FileData(GAME, filePath, mEnvData, this);
@@ -118,9 +120,14 @@ void SystemData::populateFolder(FileData* folder)
 				isGame = true;
 			}
 		}
+		else if(Utils::FileSystem::getFileName(filePath) == "media")
+		{
+			// preventing from entering the metadata folder
+			isMedia = true;
+		}
 
 		//add directories that also do not match an extension as folders
-		if(!isGame && Utils::FileSystem::isDirectory(filePath))
+		if((!isGame && !isMedia) && Utils::FileSystem::isDirectory(filePath))
 		{
 			FileData* newFolder = new FileData(FOLDER, filePath, mEnvData, this);
 			populateFolder(newFolder);
