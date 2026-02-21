@@ -6,6 +6,7 @@
 #include "components/RatingComponent.h"
 #include "components/ScrollableContainer.h"
 #include "views/gamelist/BasicGameListView.h"
+#include <future>
 
 class DetailedGameListView : public BasicGameListView
 {
@@ -17,11 +18,21 @@ public:
 	virtual const char* getName() const override { return "detailed"; }
 
 	virtual void launch(FileData* game) override;
+	virtual void update(int deltaTime) override;
 
 	void onFocusLost() override;
 
 private:
+	struct MediaAssets
+	{
+		std::string thumbnail;
+		std::string marquee;
+		std::string image;
+	};
+
 	void updateInfoPanel();
+	void startMediaAssetRequest(FileData* file);
+	void tryApplyPendingMediaAssets();
 
 	void initMDLabels();
 	void initMDValues();
@@ -47,6 +58,13 @@ private:
 
 	ScrollableContainer mDescContainer;
 	TextComponent mDescription;
+
+	std::future<MediaAssets> mMediaFuture;
+	unsigned int mMediaFutureRequestId;
+	unsigned int mMediaRequestId;
+	FileData* mMediaRequestFile;
+	unsigned int mMediaPendingRequestId;
+	FileData* mMediaPendingFile;
 };
 
 #endif // ES_APP_VIEWS_GAME_LIST_DETAILED_GAME_LIST_VIEW_H

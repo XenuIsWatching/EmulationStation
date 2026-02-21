@@ -8,6 +8,7 @@
 #include "components/ImageGridComponent.h"
 #include "components/VideoComponent.h"
 #include "views/gamelist/ISimpleGameListView.h"
+#include <future>
 
 class GridGameListView : public ISimpleGameListView
 {
@@ -44,7 +45,17 @@ protected:
 	ImageGridComponent<FileData*> mGrid;
 
 private:
+	struct MediaAssets
+	{
+		std::string video;
+		std::string thumbnail;
+		std::string marquee;
+		std::string image;
+	};
+
 	void updateInfoPanel();
+	void startMediaAssetRequest(FileData* file);
+	void tryApplyPendingMediaAssets();
 	const std::string getImagePath(FileData* file);
 
 	void initMDLabels();
@@ -71,6 +82,13 @@ private:
 
 	ScrollableContainer mDescContainer;
 	TextComponent mDescription;
+
+	std::future<MediaAssets> mMediaFuture;
+	unsigned int mMediaFutureRequestId;
+	unsigned int mMediaRequestId;
+	FileData* mMediaRequestFile;
+	unsigned int mMediaPendingRequestId;
+	FileData* mMediaPendingFile;
 };
 
 #endif // ES_APP_VIEWS_GAME_LIST_GRID_GAME_LIST_VIEW_H

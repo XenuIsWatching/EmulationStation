@@ -6,6 +6,7 @@
 #include "components/RatingComponent.h"
 #include "components/ScrollableContainer.h"
 #include "views/gamelist/BasicGameListView.h"
+#include <future>
 
 class VideoComponent;
 
@@ -28,7 +29,17 @@ protected:
 	virtual void update(int deltaTime) override;
 
 private:
+	struct MediaAssets
+	{
+		std::string video;
+		std::string thumbnail;
+		std::string marquee;
+		std::string image;
+	};
+
 	void updateInfoPanel();
+	void startMediaAssetRequest(FileData* file);
+	void tryApplyPendingMediaAssets();
 
 	void initMDLabels();
 	void initMDValues();
@@ -57,6 +68,13 @@ private:
 	TextComponent mDescription;
 
 	bool		mVideoPlaying;
+
+	std::future<MediaAssets> mMediaFuture;
+	unsigned int mMediaFutureRequestId;
+	unsigned int mMediaRequestId;
+	FileData* mMediaRequestFile;
+	unsigned int mMediaPendingRequestId;
+	FileData* mMediaPendingFile;
 
 };
 

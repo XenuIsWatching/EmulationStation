@@ -2,6 +2,8 @@
 
 #include "animations/LambdaAnimation.h"
 #include "views/ViewController.h"
+#include <future>
+#include <chrono>
 
 DetailedGameListView::DetailedGameListView(Window* window, FileData* root) :
 	BasicGameListView(window, root),
@@ -94,6 +96,12 @@ DetailedGameListView::DetailedGameListView(Window* window, FileData* root) :
 	mDescription.setFont(Font::get(FONT_SIZE_SMALL));
 	mDescription.setSize(mDescContainer.getSize().x(), 0);
 	mDescContainer.addChild(&mDescription);
+
+	mMediaFutureRequestId = 0;
+	mMediaRequestId = 0;
+	mMediaRequestFile = nullptr;
+	mMediaPendingRequestId = 0;
+	mMediaPendingFile = nullptr;
 
 
 	initMDLabels();
@@ -221,25 +229,21 @@ void DetailedGameListView::updateInfoPanel()
 		//mDescription.setText("");
 		fadingOut = true;
 	}else{
-		mThumbnail.setImage(file->getThumbnailPath());
-		mMarquee.setImage(file->getMarqueePath());
-		mImage.setImage(file->getImagePath());
-		mDescription.setText(file->metadata.get("desc"));
+		startMediaAssetRequest(file);
+		mThumbnail.setImage("");
+		mMarquee.setImage("");
+		mImage.setImage("");
+		mDescription.setText("Loading...");
 		mDescContainer.reset();
-
-		mRating.setValue(file->metadata.get("rating"));
-		mReleaseDate.setValue(file->metadata.get("releasedate"));
-		mDeveloper.setValue(file->metadata.get("developer"));
-		mPublisher.setValue(file->metadata.get("publisher"));
-		mGenre.setValue(file->metadata.get("genre"));
-		mPlayers.setValue(file->metadata.get("players"));
-		mName.setValue(file->metadata.get("name"));
-
-		if(file->getType() == GAME)
-		{
-			mLastPlayed.setValue(file->metadata.get("lastplayed"));
-			mPlayCount.setValue(file->metadata.get("playcount"));
-		}
+		mRating.setValue("0");
+		mReleaseDate.setValue("not-a-date-time");
+		mDeveloper.setValue("");
+		mPublisher.setValue("");
+		mGenre.setValue("");
+		mPlayers.setValue("");
+		mName.setValue("Loading...");
+		mLastPlayed.setValue("0");
+		mPlayCount.setValue("");
 
 		fadingOut = false;
 	}
@@ -270,6 +274,111 @@ void DetailedGameListView::updateInfoPanel()
 			comp->setAnimation(new LambdaAnimation(func, 150), 0, nullptr, fadingOut);
 		}
 	}
+}
+
+void DetailedGameListView::startMediaAssetRequest(FileData* file)
+{
+	if(file == nullptr)
+		return;
+
+	const unsigned int requestId = ++mMediaRequestId;
+
+	if(mMediaFuture.valid() && mMediaFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready)
+	{
+		mMediaPendingRequestId = requestId;
+		mMediaPendingFile = file;
+		return;
+	}
+
+	if(mMediaFuture.valid())
+		(void)mMediaFuture.get();
+
+	mMediaRequestFile = file;
+	mMediaFutureRequestId = requestId;
+
+	mMediaFuture = std::async(std::launch::async, [file]() -> DetailedGameListView::MediaAssets {
+		DetailedGameListView::MediaAssets assets;
+		assets.thumbnail = file->getThumbnailPath();
+		assets.marquee = file->getMarqueePath();
+		assets.image = file->getImagePath();
+		return assets;
+	});
+}
+
+void DetailedGameListView::tryApplyPendingMediaAssets()
+{
+	if(!mMediaFuture.valid())
+		return;
+
+	if(mMediaFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready)
+		return;
+
+	DetailedGameListView::MediaAssets assets = mMediaFuture.get();
+	if(mMediaFutureRequestId != mMediaRequestId)
+		return;
+
+	FileData* selected = (mList.size() == 0 || mList.isScrolling()) ? NULL : mList.getSelected();
+	if(selected == nullptr || selected != mMediaRequestFile)
+	{
+		if(mMediaPendingFile != nullptr)
+		{
+			FileData* pendingFile = mMediaPendingFile;
+			const unsigned int pendingRequestId = mMediaPendingRequestId;
+			mMediaPendingFile = nullptr;
+			mMediaPendingRequestId = 0;
+			mMediaRequestFile = pendingFile;
+			mMediaFutureRequestId = pendingRequestId;
+			mMediaFuture = std::async(std::launch::async, [pendingFile]() -> DetailedGameListView::MediaAssets {
+				DetailedGameListView::MediaAssets pendingAssets;
+				pendingAssets.thumbnail = pendingFile->getThumbnailPath();
+				pendingAssets.marquee = pendingFile->getMarqueePath();
+				pendingAssets.image = pendingFile->getImagePath();
+				return pendingAssets;
+			});
+		}
+		return;
+	}
+
+	mThumbnail.setImage(assets.thumbnail);
+	mMarquee.setImage(assets.marquee);
+	mImage.setImage(assets.image);
+	mDescription.setText(selected->metadata.get("desc"));
+	mDescContainer.reset();
+	mRating.setValue(selected->metadata.get("rating"));
+	mReleaseDate.setValue(selected->metadata.get("releasedate"));
+	mDeveloper.setValue(selected->metadata.get("developer"));
+	mPublisher.setValue(selected->metadata.get("publisher"));
+	mGenre.setValue(selected->metadata.get("genre"));
+	mPlayers.setValue(selected->metadata.get("players"));
+	mName.setValue(selected->metadata.get("name"));
+	if(selected->getType() == GAME)
+	{
+		mLastPlayed.setValue(selected->metadata.get("lastplayed"));
+		mPlayCount.setValue(selected->metadata.get("playcount"));
+	}
+
+	if(mMediaPendingFile != nullptr)
+	{
+		FileData* pendingFile = mMediaPendingFile;
+		const unsigned int pendingRequestId = mMediaPendingRequestId;
+		mMediaPendingFile = nullptr;
+		mMediaPendingRequestId = 0;
+		mMediaRequestFile = pendingFile;
+		mMediaFutureRequestId = pendingRequestId;
+		mMediaFuture = std::async(std::launch::async, [pendingFile]() -> DetailedGameListView::MediaAssets {
+			DetailedGameListView::MediaAssets pendingAssets;
+			pendingAssets.thumbnail = pendingFile->getThumbnailPath();
+			pendingAssets.marquee = pendingFile->getMarqueePath();
+			pendingAssets.image = pendingFile->getImagePath();
+			return pendingAssets;
+		});
+	}
+}
+
+void DetailedGameListView::update(int deltaTime)
+{
+	BasicGameListView::update(deltaTime);
+	tryApplyPendingMediaAssets();
 }
 
 void DetailedGameListView::launch(FileData* game)
