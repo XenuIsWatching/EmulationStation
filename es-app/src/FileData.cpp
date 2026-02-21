@@ -357,7 +357,7 @@ void FileData::sort(const SortType& type)
 	mSortDesc = type.description;
 }
 
-void FileData::launchGame(Window* window)
+void FileData::launchGame(Window* window, const std::string& romPathOverride)
 {
 	LOG(LogInfo) << "Attempting to launch game...";
 
@@ -368,7 +368,7 @@ void FileData::launchGame(Window* window)
 
 	std::string command = mEnvData->mLaunchCommand;
 
-	const std::string launchPath = getLaunchRomPath();
+	const std::string launchPath = romPathOverride.empty() ? getLaunchRomPath() : romPathOverride;
 	const std::string rom      = Utils::FileSystem::getEscapedPath(launchPath);
 	const std::string basename = Utils::FileSystem::getStem(launchPath);
 	const std::string rom_raw  = Utils::FileSystem::getPreferredPath(launchPath);
