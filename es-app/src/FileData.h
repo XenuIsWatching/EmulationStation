@@ -105,7 +105,7 @@ public:
 	// As above, but also remove parenthesis
 	std::string getCleanName() const;
 
-	void launchGame(Window* window);
+	void launchGame(Window* window, const std::string& romPathOverride = "");
 
 	typedef bool ComparisonFunction(const FileData* a, const FileData* b);
 	struct SortType

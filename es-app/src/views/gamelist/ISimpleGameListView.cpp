@@ -1,6 +1,7 @@
 #include "views/gamelist/ISimpleGameListView.h"
 
 #include "guis/GuiSettings.h"
+#include "components/ImageComponent.h"
 #include "components/TextComponent.h"
 #include "views/UIModeController.h"
 #include "views/ViewController.h"
@@ -13,6 +14,149 @@
 
 namespace
 {
+	class RomSelectionMenu : public GuiSettings
+	{
+	public:
+		RomSelectionMenu(Window* window, FileData* game)
+			: GuiSettings(window, "ROMS"), mGame(game), mPreferredChanged(false)
+		{
+			buildRows();
+		}
+
+		~RomSelectionMenu()
+		{
+			if(!mPreferredChanged || mGame == nullptr)
+				return;
+
+			ViewController::get()->onFileChanged(mGame, FILE_METADATA_CHANGED);
+			FileData* source = mGame->getSourceFileData();
+			if(source != mGame)
+				ViewController::get()->onFileChanged(source, FILE_METADATA_CHANGED);
+		}
+
+		std::vector<HelpPrompt> getHelpPrompts() override
+		{
+			std::vector<HelpPrompt> prompts = GuiSettings::getHelpPrompts();
+			prompts.push_back(HelpPrompt("y", "preferred"));
+			return prompts;
+		}
+
+	private:
+		struct RomRowWidgets
+		{
+			std::shared_ptr<ImageComponent> star;
+			std::shared_ptr<TextComponent> name;
+		};
+
+		void buildRows()
+		{
+			if(mGame == nullptr)
+				return;
+
+			const std::vector<RomData>& roms = mGame->getRoms();
+			for(unsigned int i = 0; i < roms.size(); ++i)
+			{
+				ComponentListRow row;
+
+				auto star = std::make_shared<ImageComponent>(mWindow);
+				const float starSize = Font::get(FONT_SIZE_MEDIUM)->getLetterHeight();
+				star->setImage(":/star_filled.svg");
+				star->setResize(starSize, starSize);
+				star->setVisible(roms[i].preferred);
+
+				std::string romName = roms[i].romName.empty() ? mGame->getName() : roms[i].romName;
+				auto label = std::make_shared<TextComponent>(mWindow, romName, Font::get(FONT_SIZE_MEDIUM), 0x777777FF);
+
+				row.addElement(star, false, false);
+				row.addElement(label, true);
+				row.input_handler = [this, i](InputConfig* config, Input input) -> bool {
+					if(input.value == 0)
+						return false;
+
+					if(config->isMappedTo("a", input))
+					{
+						launchRom(i);
+						return true;
+					}
+
+					if(config->isMappedTo("y", input))
+					{
+						setPreferredRom(i);
+						return true;
+					}
+
+					return false;
+				};
+
+				addRow(row);
+
+				RomRowWidgets widgets;
+				widgets.star = star;
+				widgets.name = label;
+				mRows.push_back(widgets);
+			}
+
+			updatePreferredIndicator();
+		}
+
+		void setPreferredRom(unsigned int index)
+		{
+			if(mGame == nullptr)
+				return;
+
+			FileData* source = mGame->getSourceFileData();
+			std::vector<RomData>& roms = source->getRomsMutable();
+			if(index >= roms.size())
+				return;
+
+			for(unsigned int i = 0; i < roms.size(); ++i)
+				roms[i].preferred = (i == index);
+
+			source->metadata.set("name", source->metadata.get("name"));
+			source->getSystem()->onMetaDataSavePoint();
+
+			if(mGame != source)
+				mGame->refreshMetadata();
+
+			mPreferredChanged = true;
+			updatePreferredIndicator();
+		}
+
+		void launchRom(unsigned int index)
+		{
+			if(mGame == nullptr)
+				return;
+
+			FileData* selectedEntry = mGame;
+			FileData* source = selectedEntry->getSourceFileData();
+			const std::vector<RomData>& roms = source->getRoms();
+			if(index >= roms.size() || roms[index].path.empty())
+				return;
+
+			const std::string launchPath = roms[index].path;
+			delete this;
+
+			source->launchGame(mWindow, launchPath);
+			ViewController::get()->onFileChanged(source, FILE_METADATA_CHANGED);
+			if(selectedEntry != source)
+				ViewController::get()->onFileChanged(selectedEntry, FILE_METADATA_CHANGED);
+		}
+
+		void updatePreferredIndicator()
+		{
+			if(mGame == nullptr)
+				return;
+
+			const std::vector<RomData>& roms = mGame->getRoms();
+			for(unsigned int i = 0; i < roms.size() && i < mRows.size(); ++i)
+				mRows[i].star->setVisible(roms[i].preferred);
+		}
+
+		FileData* mGame;
+		bool mPreferredChanged;
+		std::vector<RomRowWidgets> mRows;
+	};
+
 	void openRomSelectionMenu(Window* window, FileData* game)
 	{
 		if(game == nullptr || game->getType() != GAME)
@@ -22,16 +166,7 @@ namespace
 		if(roms.empty())
 			return;
 
-		GuiSettings* menu = new GuiSettings(window, "ROMS");
-		for(auto it = roms.cbegin(); it != roms.cend(); ++it)
-		{
-			ComponentListRow row;
-			std::string romName = it->romName.empty() ? game->getName() : it->romName;
-			row.addElement(std::make_shared<TextComponent>(window, romName, Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
-			menu->addRow(row);
-		}
-
-		window->pushGui(menu);
+		window->pushGui(new RomSelectionMenu(window, game));
 	}
 }
 
