@@ -14,6 +14,7 @@ typedef SSIZE_T ssize_t;
 #endif
 #include <vlc/vlc.h>
 #include <SDL_mutex.h>
+#include <SDL_timer.h>
 
 libvlc_instance_t* VideoVlcComponent::mVLC = NULL;
 
@@ -255,8 +256,13 @@ void VideoVlcComponent::startVideo()
 				unsigned track_count;
 				// Get the media metadata so we can find the aspect ratio
 				libvlc_media_parse_with_options(mMedia, libvlc_media_fetch_local, -1);
+				const Uint32 parseStart = SDL_GetTicks();
 				while (libvlc_media_get_parsed_status(mMedia) == 0)
-					;
+				{
+					if (SDL_GetTicks() - parseStart >= 25)
+						break;
+					SDL_Delay(1);
+				}
 				libvlc_media_track_t** tracks;
 				track_count = libvlc_media_tracks_get(mMedia, &tracks);
 				for (unsigned track = 0; track < track_count; ++track)
@@ -269,6 +275,20 @@ void VideoVlcComponent::startVideo()
 					}
 				}
 				libvlc_media_tracks_release(tracks, track_count);
+
+				if ((mVideoWidth == 0) || (mVideoHeight == 0))
+				{
+					if (mTargetSize.x() > 0 && mTargetSize.y() > 0)
+					{
+						mVideoWidth = (unsigned int)mTargetSize.x();
+						mVideoHeight = (unsigned int)mTargetSize.y();
+					}
+					else
+					{
+						mVideoWidth = 640;
+						mVideoHeight = 480;
+					}
+				}
 
 				// Make sure we found a valid video track
 				if ((mVideoWidth > 0) && (mVideoHeight > 0))

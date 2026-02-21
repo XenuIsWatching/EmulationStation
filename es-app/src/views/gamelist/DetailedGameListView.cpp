@@ -2,6 +2,7 @@
 
 #include "animations/LambdaAnimation.h"
 #include "views/ViewController.h"
+#include "Log.h"
 #include <future>
 #include <chrono>
 
@@ -100,6 +101,7 @@ DetailedGameListView::DetailedGameListView(Window* window, FileData* root) :
 	mMediaFutureRequestId = 0;
 	mMediaRequestId = 0;
 	mMediaRequestFile = nullptr;
+	mLastAppliedMediaFile = nullptr;
 	mMediaPendingRequestId = 0;
 	mMediaPendingFile = nullptr;
 
@@ -229,11 +231,24 @@ void DetailedGameListView::updateInfoPanel()
 		//mDescription.setText("");
 		fadingOut = true;
 	}else{
+		const bool inFlightSameSelection =
+			mMediaFuture.valid() &&
+			mMediaFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready &&
+			mMediaRequestFile == file;
+		const bool pendingSameSelection = (mMediaPendingFile == file);
+		const bool alreadyAppliedAndIdle =
+			(mLastAppliedMediaFile == file) &&
+			!mMediaFuture.valid() &&
+			mMediaPendingFile == nullptr;
+
+		if(inFlightSameSelection || pendingSameSelection || alreadyAppliedAndIdle)
+			return;
+
 		startMediaAssetRequest(file);
 		mThumbnail.setImage("");
 		mMarquee.setImage("");
 		mImage.setImage("");
-		mDescription.setText("Loading...");
+		mDescription.setText(file->metadata.get("desc"));
 		mDescContainer.reset();
 		mRating.setValue("0");
 		mReleaseDate.setValue("not-a-date-time");
@@ -281,12 +296,25 @@ void DetailedGameListView::startMediaAssetRequest(FileData* file)
 	if(file == nullptr)
 		return;
 
+	if(mMediaPendingFile == file)
+		return;
+
+	if(mMediaFuture.valid() && mMediaRequestFile == file)
+	{
+		if(mMediaFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready)
+			return;
+		if(mMediaFutureRequestId == mMediaRequestId)
+			return;
+	}
+
 	const unsigned int requestId = ++mMediaRequestId;
+	LOG(LogDebug) << "[DetailedMedia] request start id=" << requestId << " file=" << file;
 
 	if(mMediaFuture.valid() && mMediaFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready)
 	{
 		mMediaPendingRequestId = requestId;
 		mMediaPendingFile = file;
+		LOG(LogDebug) << "[DetailedMedia] queue pending id=" << requestId << " pendingFile=" << file;
 		return;
 	}
 
@@ -295,6 +323,7 @@ void DetailedGameListView::startMediaAssetRequest(FileData* file)
 
 	mMediaRequestFile = file;
 	mMediaFutureRequestId = requestId;
+	LOG(LogDebug) << "[DetailedMedia] launch async id=" << requestId << " requestFile=" << file;
 
 	mMediaFuture = std::async(std::launch::async, [file]() -> DetailedGameListView::MediaAssets {
 		DetailedGameListView::MediaAssets assets;
@@ -314,12 +343,10 @@ void DetailedGameListView::tryApplyPendingMediaAssets()
 		return;
 
 	DetailedGameListView::MediaAssets assets = mMediaFuture.get();
+	LOG(LogDebug) << "[DetailedMedia] future ready requestId=" << mMediaRequestId << " futureRequestId=" << mMediaFutureRequestId;
 	if(mMediaFutureRequestId != mMediaRequestId)
-		return;
-
-	FileData* selected = (mList.size() == 0 || mList.isScrolling()) ? NULL : mList.getSelected();
-	if(selected == nullptr || selected != mMediaRequestFile)
 	{
+		LOG(LogDebug) << "[DetailedMedia] drop stale by id mismatch";
 		if(mMediaPendingFile != nullptr)
 		{
 			FileData* pendingFile = mMediaPendingFile;
@@ -339,9 +366,40 @@ void DetailedGameListView::tryApplyPendingMediaAssets()
 		return;
 	}
 
+	FileData* selected = (mList.size() == 0 || mList.isScrolling()) ? NULL : mList.getSelected();
+	if(selected == nullptr || selected != mMediaRequestFile)
+	{
+		LOG(LogDebug) << "[DetailedMedia] drop stale by selection selected=" << selected << " requestFile=" << mMediaRequestFile;
+		if(mMediaPendingFile != nullptr)
+		{
+			FileData* pendingFile = mMediaPendingFile;
+			const unsigned int pendingRequestId = mMediaPendingRequestId;
+			mMediaPendingFile = nullptr;
+			mMediaPendingRequestId = 0;
+			mMediaRequestFile = pendingFile;
+			mMediaFutureRequestId = pendingRequestId;
+			mMediaFuture = std::async(std::launch::async, [pendingFile]() -> DetailedGameListView::MediaAssets {
+				DetailedGameListView::MediaAssets pendingAssets;
+				pendingAssets.thumbnail = pendingFile->getThumbnailPath();
+				pendingAssets.marquee = pendingFile->getMarqueePath();
+				pendingAssets.image = pendingFile->getImagePath();
+				return pendingAssets;
+			});
+		}
+		else if(selected != nullptr)
+		{
+			LOG(LogDebug) << "[DetailedMedia] reschedule current selection selected=" << selected;
+			startMediaAssetRequest(selected);
+		}
+		return;
+	}
+
+	LOG(LogDebug) << "[DetailedMedia] apply assets selected=" << selected
+		<< " image='" << assets.image << "' marquee='" << assets.marquee << "' thumb='" << assets.thumbnail << "'";
 	mThumbnail.setImage(assets.thumbnail);
 	mMarquee.setImage(assets.marquee);
 	mImage.setImage(assets.image);
+	mLastAppliedMediaFile = selected;
 	mDescription.setText(selected->metadata.get("desc"));
 	mDescContainer.reset();
 	mRating.setValue(selected->metadata.get("rating"));

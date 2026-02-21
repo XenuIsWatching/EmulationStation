@@ -73,6 +73,7 @@ private:
 	unsigned int mMediaFutureRequestId;
 	unsigned int mMediaRequestId;
 	FileData* mMediaRequestFile;
+	FileData* mLastAppliedMediaFile;
 	unsigned int mMediaPendingRequestId;
 	FileData* mMediaPendingFile;
 

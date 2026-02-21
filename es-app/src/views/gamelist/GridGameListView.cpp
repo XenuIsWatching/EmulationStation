@@ -4,6 +4,7 @@
 #include "views/UIModeController.h"
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
+#include "Log.h"
 #include "Settings.h"
 #include "SystemData.h"
 #include <future>
@@ -123,6 +124,7 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mMediaFutureRequestId = 0;
 	mMediaRequestId = 0;
 	mMediaRequestFile = nullptr;
+	mLastAppliedMediaFile = nullptr;
 	mMediaPendingRequestId = 0;
 	mMediaPendingFile = nullptr;
 	updateInfoPanel();
@@ -324,6 +326,19 @@ void GridGameListView::updateInfoPanel()
 		//mDescription.setText("");
 		fadingOut = true;
 	}else{
+		const bool inFlightSameSelection =
+			mMediaFuture.valid() &&
+			mMediaFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready &&
+			mMediaRequestFile == file;
+		const bool pendingSameSelection = (mMediaPendingFile == file);
+		const bool alreadyAppliedAndIdle =
+			(mLastAppliedMediaFile == file) &&
+			!mMediaFuture.valid() &&
+			mMediaPendingFile == nullptr;
+
+		if(inFlightSameSelection || pendingSameSelection || alreadyAppliedAndIdle)
+			return;
+
 		startMediaAssetRequest(file);
 		mVideo->setVideo("");
 		mVideo->setImage("");
@@ -331,7 +346,7 @@ void GridGameListView::updateInfoPanel()
 		mMarquee.setImage("");
 		mImage.setImage("");
 
-		mDescription.setText("Loading...");
+		mDescription.setText(file->metadata.get("desc"));
 		mDescContainer.reset();
 		mRating.setValue("0");
 		mReleaseDate.setValue("not-a-date-time");
@@ -379,12 +394,25 @@ void GridGameListView::startMediaAssetRequest(FileData* file)
 	if(file == nullptr)
 		return;
 
+	if(mMediaPendingFile == file)
+		return;
+
+	if(mMediaFuture.valid() && mMediaRequestFile == file)
+	{
+		if(mMediaFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready)
+			return;
+		if(mMediaFutureRequestId == mMediaRequestId)
+			return;
+	}
+
 	const unsigned int requestId = ++mMediaRequestId;
+	LOG(LogDebug) << "[GridMedia] request start id=" << requestId << " file=" << file;
 
 	if(mMediaFuture.valid() && mMediaFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready)
 	{
 		mMediaPendingRequestId = requestId;
 		mMediaPendingFile = file;
+		LOG(LogDebug) << "[GridMedia] queue pending id=" << requestId << " pendingFile=" << file;
 		return;
 	}
 
@@ -393,6 +421,7 @@ void GridGameListView::startMediaAssetRequest(FileData* file)
 
 	mMediaRequestFile = file;
 	mMediaFutureRequestId = requestId;
+	LOG(LogDebug) << "[GridMedia] launch async id=" << requestId << " requestFile=" << file;
 
 	mMediaFuture = std::async(std::launch::async, [file]() -> GridGameListView::MediaAssets {
 		GridGameListView::MediaAssets assets;
@@ -413,12 +442,10 @@ void GridGameListView::tryApplyPendingMediaAssets()
 		return;
 
 	GridGameListView::MediaAssets assets = mMediaFuture.get();
+	LOG(LogDebug) << "[GridMedia] future ready requestId=" << mMediaRequestId << " futureRequestId=" << mMediaFutureRequestId;
 	if(mMediaFutureRequestId != mMediaRequestId)
-		return;
-
-	FileData* selected = (mGrid.size() == 0 || mGrid.isScrolling()) ? NULL : mGrid.getSelected();
-	if(selected == nullptr || selected != mMediaRequestFile)
 	{
+		LOG(LogDebug) << "[GridMedia] drop stale by id mismatch";
 		if(mMediaPendingFile != nullptr)
 		{
 			FileData* pendingFile = mMediaPendingFile;
@@ -439,6 +466,38 @@ void GridGameListView::tryApplyPendingMediaAssets()
 		return;
 	}
 
+	FileData* selected = (mGrid.size() == 0 || mGrid.isScrolling()) ? NULL : mGrid.getSelected();
+	if(selected == nullptr || selected != mMediaRequestFile)
+	{
+		LOG(LogDebug) << "[GridMedia] drop stale by selection selected=" << selected << " requestFile=" << mMediaRequestFile;
+		if(mMediaPendingFile != nullptr)
+		{
+			FileData* pendingFile = mMediaPendingFile;
+			const unsigned int pendingRequestId = mMediaPendingRequestId;
+			mMediaPendingFile = nullptr;
+			mMediaPendingRequestId = 0;
+			mMediaRequestFile = pendingFile;
+			mMediaFutureRequestId = pendingRequestId;
+			mMediaFuture = std::async(std::launch::async, [pendingFile]() -> GridGameListView::MediaAssets {
+				GridGameListView::MediaAssets pendingAssets;
+				pendingAssets.video = pendingFile->getVideoPath();
+				pendingAssets.thumbnail = pendingFile->getThumbnailPath();
+				pendingAssets.marquee = pendingFile->getMarqueePath();
+				pendingAssets.image = pendingFile->getImagePath();
+				return pendingAssets;
+			});
+		}
+		else if(selected != nullptr)
+		{
+			LOG(LogDebug) << "[GridMedia] reschedule current selection selected=" << selected;
+			startMediaAssetRequest(selected);
+		}
+		return;
+	}
+
+	LOG(LogDebug) << "[GridMedia] apply assets selected=" << selected
+		<< " video='" << assets.video << "' image='" << assets.image
+		<< "' marquee='" << assets.marquee << "' thumb='" << assets.thumbnail << "'";
 	if(!mVideo->setVideo(assets.video))
 		mVideo->setDefaultVideo();
 	mVideoPlaying = true;
@@ -446,6 +505,7 @@ void GridGameListView::tryApplyPendingMediaAssets()
 	mVideo->setImage(assets.thumbnail);
 	mMarquee.setImage(assets.marquee);
 	mImage.setImage(assets.image);
+	mLastAppliedMediaFile = selected;
 	mDescription.setText(selected->metadata.get("desc"));
 	mDescContainer.reset();
 	mRating.setValue(selected->metadata.get("rating"));
