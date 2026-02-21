@@ -482,7 +482,7 @@ std::vector<HelpPrompt> GridGameListView::getHelpPrompts()
 	if(!UIModeController::getInstance()->isUIModeKid())
 		prompts.push_back(HelpPrompt("select", "options"));
 	if(mRoot->getSystem()->isGameSystem())
-		prompts.push_back(HelpPrompt("x", "random"));
+		prompts.push_back(HelpPrompt("x", "roms"));
 	if(mRoot->getSystem()->isGameSystem() && !UIModeController::getInstance()->isUIModeKid())
 	{
 		std::string prompt = CollectionSystemManager::get()->getEditingCollection();

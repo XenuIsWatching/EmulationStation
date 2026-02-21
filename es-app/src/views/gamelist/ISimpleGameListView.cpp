@@ -1,5 +1,7 @@
 #include "views/gamelist/ISimpleGameListView.h"
 
+#include "guis/GuiSettings.h"
+#include "components/TextComponent.h"
 #include "views/UIModeController.h"
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
@@ -7,6 +9,31 @@
 #include "Settings.h"
 #include "Sound.h"
 #include "SystemData.h"
+#include "Window.h"
+
+namespace
+{
+	void openRomSelectionMenu(Window* window, FileData* game)
+	{
+		if(game == nullptr || game->getType() != GAME)
+			return;
+
+		const std::vector<RomData>& roms = game->getRoms();
+		if(roms.empty())
+			return;
+
+		GuiSettings* menu = new GuiSettings(window, "ROMS");
+		for(auto it = roms.cbegin(); it != roms.cend(); ++it)
+		{
+			ComponentListRow row;
+			std::string romName = it->romName.empty() ? game->getName() : it->romName;
+			row.addElement(std::make_shared<TextComponent>(window, romName, Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+			menu->addRow(row);
+		}
+
+		window->pushGui(menu);
+	}
+}
 
 ISimpleGameListView::ISimpleGameListView(Window* window, FileData* root) : IGameListView(window, root),
 	mHeaderText(window), mHeaderImage(window), mBackground(window)
@@ -139,13 +166,12 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 		{
 			if (mRoot->getSystem()->isGameSystem())
 			{
-				// go to random system game
-				FileData* randomGame = getCursor()->getSystem()->getRandomGame();
-				if (randomGame)
+				FileData* cursor = getCursor();
+				if(cursor->getType() == GAME)
 				{
-					setCursor(randomGame);
+					openRomSelectionMenu(mWindow, cursor);
+					return true;
 				}
-				return true;
 			}
 		}else if (config->isMappedTo("y", input) && !UIModeController::getInstance()->isUIModeKid())
 		{

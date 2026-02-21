@@ -10,7 +10,7 @@
 #include "Settings.h"
 #include "SystemData.h"
 #include <pugixml.hpp>
-#include <unordered_set>
+#include <unordered_map>
 
 namespace
 {
@@ -214,36 +214,24 @@ FileData* findOrCreateFile(SystemData* system, const std::string& path, FileType
 	return NULL;
 }
 
-FileData* findFile(SystemData* system, const std::string& path)
+std::unordered_map<std::string, FileData*> buildGamePathIndex(SystemData* system)
 {
-	FileData* root = system->getRootFolder();
-	bool contains = false;
-	const std::string systemPath = root->getPath();
+	std::unordered_map<std::string, FileData*> index;
+	FileData* rootFolder = system->getRootFolder();
+	if(rootFolder == NULL)
+		return index;
 
-	std::string relative = Utils::FileSystem::removeCommonPath(path, systemPath, contains, true);
-	if(!contains)
-		return NULL;
+	const std::vector<FileData*> games = rootFolder->getFilesRecursive(GAME);
+	for(auto it = games.cbegin(); it != games.cend(); ++it)
+		index[(*it)->getPath()] = *it;
 
-	Utils::FileSystem::stringList pathList = Utils::FileSystem::getPathList(relative);
-	if(pathList.empty())
-		return NULL;
-
-	FileData* treeNode = root;
-	for(auto path_it = pathList.cbegin(); path_it != pathList.cend(); ++path_it)
-	{
-		const std::unordered_map<std::string, FileData*>& children = treeNode->getChildrenByFilename();
-		auto candidate = children.find(*path_it);
-		if(candidate == children.cend())
-			return NULL;
-
-		treeNode = candidate->second;
-	}
-
-	return treeNode;
+	return index;
 }
 
 void parseGamelist(SystemData* system)
 {
+	const auto parseStartTs = std::chrono::steady_clock::now();
+
 	bool trustGamelist = Settings::getInstance()->getBool("ParseGamelistOnly");
 	std::string xmlpath = system->getGamelistPath(false);
 	const std::vector<std::string> allowedExtensions = system->getExtensions();
@@ -270,9 +258,14 @@ void parseGamelist(SystemData* system)
 	}
 
 	std::string relativeTo = system->getStartPath();
+	const auto indexStartTs = std::chrono::steady_clock::now();
+	std::unordered_map<std::string, FileData*> gamePathIndex = buildGamePathIndex(system);
+	const auto indexEndTs = std::chrono::steady_clock::now();
 
-	std::unordered_set<std::string> canonicalGamePaths;
-	std::unordered_set<std::string> romVariantPaths;
+	size_t hierarchicalGameCount = 0;
+	size_t romVariantCount = 0;
+	size_t duplicateRemovedCount = 0;
+	const auto parseLoopStartTs = std::chrono::steady_clock::now();
 
 	const char* tagList[2] = { "game", "folder" };
 	FileType typeList[2] = { GAME, FOLDER };
@@ -312,7 +305,7 @@ void parseGamelist(SystemData* system)
 			else if(!file->isArcadeAsset())
 			{
 				if(type == GAME)
-					canonicalGamePaths.insert(path);
+					gamePathIndex[file->getPath()] = file;
 
 				std::string defaultName = file->metadata.get("name");
 				file->metadata = MetaDataList::createFromXML(file->getType() == GAME ? GAME_METADATA : FOLDER_METADATA, fileNode, relativeTo);
@@ -326,14 +319,16 @@ void parseGamelist(SystemData* system)
 					pugi::xml_node romsNode = fileNode.child("roms");
 					if(romsNode)
 					{
+						hierarchicalGameCount++;
 						for(pugi::xml_node romNode = romsNode.child("rom"); romNode; romNode = romNode.next_sibling("rom"))
 						{
 							RomData rom = parseRomNode(romNode, relativeTo);
 							if(!rom.path.empty())
 							{
 								roms.push_back(rom);
-								romVariantPaths.insert(rom.path);
+								romVariantCount++;
 							}
+							
 						}
 					}
 
@@ -353,7 +348,7 @@ void parseGamelist(SystemData* system)
 						rom.marquee = fileNode.child("marquee").text().get();
 						rom.preferred = true;
 						roms.push_back(rom);
-						romVariantPaths.insert(rom.path);
+						romVariantCount++;
 					}
 
 					bool hasPreferred = false;
@@ -372,6 +367,24 @@ void parseGamelist(SystemData* system)
 					// Preserve legacy behavior where releasedate was expected on game-level metadata.
 					if((file->metadata.get("releasedate").empty() || file->metadata.get("releasedate") == "not-a-date-time") && !roms.front().releaseDate.empty())
 						file->metadata.set("releasedate", roms.front().releaseDate);
+
+					// Keep one canonical FileData entry per hierarchical game. Any other
+					// ROM paths in this same game node are variants and should not remain
+					// as standalone top-level entries discovered from filesystem scanning.
+					for(auto rit = roms.cbegin(); rit != roms.cend(); ++rit)
+					{
+						if(rit->path.empty() || rit->path == file->getPath())
+							continue;
+
+						auto duplicateIt = gamePathIndex.find(rit->path);
+						FileData* duplicate = (duplicateIt != gamePathIndex.cend()) ? duplicateIt->second : NULL;
+						if(duplicate != NULL && duplicate->getType() == GAME)
+						{
+							gamePathIndex.erase(rit->path);
+							delete duplicate;
+							duplicateRemovedCount++;
+						}
+					}
 				}
 
 				//make sure name gets set if one didn't exist
@@ -383,17 +396,15 @@ void parseGamelist(SystemData* system)
 		}
 	}
 
-	// Hierarchical entries keep one canonical FileData; remove sibling FileData nodes
-	// created from filesystem scanning for non-canonical ROM variants.
-	for(auto it = romVariantPaths.cbegin(); it != romVariantPaths.cend(); ++it)
-	{
-		if(canonicalGamePaths.find(*it) != canonicalGamePaths.cend())
-			continue;
-
-		FileData* duplicate = findFile(system, *it);
-		if(duplicate != NULL && duplicate->getType() == GAME)
-			delete duplicate;
-	}
+	const auto parseLoopEndTs = std::chrono::steady_clock::now();
+	const auto parseEndTs = std::chrono::steady_clock::now();
+	LOG(LogInfo) << "Parsed gamelist performance for system '" << system->getName() << "': "
+		<< "index=" << std::chrono::duration_cast<std::chrono::milliseconds>(indexEndTs - indexStartTs).count() << "ms, "
+		<< "parse-loop=" << std::chrono::duration_cast<std::chrono::milliseconds>(parseLoopEndTs - parseLoopStartTs).count() << "ms, "
+		<< "total=" << std::chrono::duration_cast<std::chrono::milliseconds>(parseEndTs - parseStartTs).count() << "ms, "
+		<< "hierarchical-games=" << hierarchicalGameCount << ", "
+		<< "rom-variants=" << romVariantCount << ", "
+		<< "duplicates-removed=" << duplicateRemovedCount;
 }
 
 void addFileDataNode(pugi::xml_node& parent, const FileData* file, const char* tag, SystemData* system)
