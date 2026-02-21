@@ -10,6 +10,7 @@
 #include "Settings.h"
 #include "SystemData.h"
 #include <pugixml.hpp>
+#include <unordered_set>
 
 namespace
 {
@@ -213,6 +214,34 @@ FileData* findOrCreateFile(SystemData* system, const std::string& path, FileType
 	return NULL;
 }
 
+FileData* findFile(SystemData* system, const std::string& path)
+{
+	FileData* root = system->getRootFolder();
+	bool contains = false;
+	const std::string systemPath = root->getPath();
+
+	std::string relative = Utils::FileSystem::removeCommonPath(path, systemPath, contains, true);
+	if(!contains)
+		return NULL;
+
+	Utils::FileSystem::stringList pathList = Utils::FileSystem::getPathList(relative);
+	if(pathList.empty())
+		return NULL;
+
+	FileData* treeNode = root;
+	for(auto path_it = pathList.cbegin(); path_it != pathList.cend(); ++path_it)
+	{
+		const std::unordered_map<std::string, FileData*>& children = treeNode->getChildrenByFilename();
+		auto candidate = children.find(*path_it);
+		if(candidate == children.cend())
+			return NULL;
+
+		treeNode = candidate->second;
+	}
+
+	return treeNode;
+}
+
 void parseGamelist(SystemData* system)
 {
 	bool trustGamelist = Settings::getInstance()->getBool("ParseGamelistOnly");
@@ -241,6 +270,9 @@ void parseGamelist(SystemData* system)
 	}
 
 	std::string relativeTo = system->getStartPath();
+
+	std::unordered_set<std::string> canonicalGamePaths;
+	std::unordered_set<std::string> romVariantPaths;
 
 	const char* tagList[2] = { "game", "folder" };
 	FileType typeList[2] = { GAME, FOLDER };
@@ -279,6 +311,9 @@ void parseGamelist(SystemData* system)
 			}
 			else if(!file->isArcadeAsset())
 			{
+				if(type == GAME)
+					canonicalGamePaths.insert(path);
+
 				std::string defaultName = file->metadata.get("name");
 				file->metadata = MetaDataList::createFromXML(file->getType() == GAME ? GAME_METADATA : FOLDER_METADATA, fileNode, relativeTo);
 				if(type == GAME)
@@ -295,7 +330,10 @@ void parseGamelist(SystemData* system)
 						{
 							RomData rom = parseRomNode(romNode, relativeTo);
 							if(!rom.path.empty())
+							{
 								roms.push_back(rom);
+								romVariantPaths.insert(rom.path);
+							}
 						}
 					}
 
@@ -315,6 +353,7 @@ void parseGamelist(SystemData* system)
 						rom.marquee = fileNode.child("marquee").text().get();
 						rom.preferred = true;
 						roms.push_back(rom);
+						romVariantPaths.insert(rom.path);
 					}
 
 					bool hasPreferred = false;
@@ -342,6 +381,18 @@ void parseGamelist(SystemData* system)
 				file->metadata.resetChangedFlag();
 			}
 		}
+	}
+
+	// Hierarchical entries keep one canonical FileData; remove sibling FileData nodes
+	// created from filesystem scanning for non-canonical ROM variants.
+	for(auto it = romVariantPaths.cbegin(); it != romVariantPaths.cend(); ++it)
+	{
+		if(canonicalGamePaths.find(*it) != canonicalGamePaths.cend())
+			continue;
+
+		FileData* duplicate = findFile(system, *it);
+		if(duplicate != NULL && duplicate->getType() == GAME)
+			delete duplicate;
 	}
 }
 
