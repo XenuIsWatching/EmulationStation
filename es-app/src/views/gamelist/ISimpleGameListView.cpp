@@ -45,6 +45,8 @@ namespace
 			if(!mPreferredChanged || mGame == nullptr)
 				return;
 
+			// Preferred ROM changes alter effective media/launch selection, so notify both
+			// the visible entry and canonical source entry to refresh info panels immediately.
 			ViewController::get()->onFileChanged(mGame, FILE_METADATA_CHANGED);
 			FileData* source = mGame->getSourceFileData();
 			if(source != mGame)
@@ -122,6 +124,7 @@ namespace
 			for(unsigned int i = 0; i < roms.size(); ++i)
 				roms[i].preferred = (i == index);
 
+			// Mark metadata dirty so onMetaDataSavePoint() persists updated ROM preference.
 			source->metadata.set("name", source->metadata.get("name"));
 			source->getSystem()->onMetaDataSavePoint();
 
@@ -236,7 +239,14 @@ void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme
 void ISimpleGameListView::onFileChanged(FileData* /*file*/, FileChangeType change)
 {
 	if(change == FILE_METADATA_CHANGED)
+	{
+		FileData* cursor = getCursor();
+		// Keep metadata updates lightweight (avoid full list repopulate/flicker) while
+		// still forcing current row/panel refresh for preferred-ROM media changes.
+		if(cursor != nullptr && !cursor->isPlaceHolder())
+			setCursor(cursor, true);
 		return;
+	}
 
 	// we could be tricky here to be efficient;
 	// but this shouldn't happen very often so we'll just always repopulate
