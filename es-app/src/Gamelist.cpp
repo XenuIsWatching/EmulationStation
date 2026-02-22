@@ -70,10 +70,10 @@ namespace
 		rom.languages = parseRomMultiValue(romNode, "language", "languages");
 		rom.releaseDate = romNode.child("releasedate").text().get();
 		rom.revision = romNode.child("revision").text().get();
-		rom.image = romNode.child("image").text().get();
-		rom.video = romNode.child("video").text().get();
-		rom.thumbnail = romNode.child("thumbnail").text().get();
-		rom.marquee = romNode.child("marquee").text().get();
+		rom.image = Utils::FileSystem::resolveRelativePath(romNode.child("image").text().get(), relativeTo, true, true);
+		rom.video = Utils::FileSystem::resolveRelativePath(romNode.child("video").text().get(), relativeTo, true, true);
+		rom.thumbnail = Utils::FileSystem::resolveRelativePath(romNode.child("thumbnail").text().get(), relativeTo, true, true);
+		rom.marquee = Utils::FileSystem::resolveRelativePath(romNode.child("marquee").text().get(), relativeTo, true, true);
 		rom.preferred = parsePreferredRomAttribute(romNode);
 		return rom;
 	}
@@ -342,10 +342,10 @@ void parseGamelist(SystemData* system)
 						rom.languages = parseRomMultiValue(fileNode, "language", "languages");
 						rom.releaseDate = fileNode.child("releasedate").text().get();
 						rom.revision = fileNode.child("revision").text().get();
-						rom.image = fileNode.child("image").text().get();
-						rom.video = fileNode.child("video").text().get();
-						rom.thumbnail = fileNode.child("thumbnail").text().get();
-						rom.marquee = fileNode.child("marquee").text().get();
+						rom.image = Utils::FileSystem::resolveRelativePath(fileNode.child("image").text().get(), relativeTo, true, true);
+						rom.video = Utils::FileSystem::resolveRelativePath(fileNode.child("video").text().get(), relativeTo, true, true);
+						rom.thumbnail = Utils::FileSystem::resolveRelativePath(fileNode.child("thumbnail").text().get(), relativeTo, true, true);
+						rom.marquee = Utils::FileSystem::resolveRelativePath(fileNode.child("marquee").text().get(), relativeTo, true, true);
 						rom.preferred = true;
 						roms.push_back(rom);
 						romVariantCount++;
