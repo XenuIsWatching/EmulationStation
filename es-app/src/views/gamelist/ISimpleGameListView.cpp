@@ -14,6 +14,23 @@
 
 namespace
 {
+	class RomPromptTextComponent : public TextComponent
+	{
+	public:
+		RomPromptTextComponent(Window* window, const std::string& text, const std::shared_ptr<Font>& font, unsigned int color)
+			: TextComponent(window, text, font, color)
+		{
+		}
+
+		std::vector<HelpPrompt> getHelpPrompts() override
+		{
+			std::vector<HelpPrompt> prompts;
+			prompts.push_back(HelpPrompt("a", "launch"));
+			prompts.push_back(HelpPrompt("y", "preferred"));
+			return prompts;
+		}
+	};
+
 	class RomSelectionMenu : public GuiSettings
 	{
 	public:
@@ -32,13 +49,6 @@ namespace
 			FileData* source = mGame->getSourceFileData();
 			if(source != mGame)
 				ViewController::get()->onFileChanged(source, FILE_METADATA_CHANGED);
-		}
-
-		std::vector<HelpPrompt> getHelpPrompts() override
-		{
-			std::vector<HelpPrompt> prompts = GuiSettings::getHelpPrompts();
-			prompts.push_back(HelpPrompt("y", "preferred"));
-			return prompts;
 		}
 
 	private:
@@ -65,7 +75,7 @@ namespace
 				star->setVisible(roms[i].preferred);
 
 				std::string romName = roms[i].romName.empty() ? mGame->getName() : roms[i].romName;
-				auto label = std::make_shared<TextComponent>(mWindow, romName, Font::get(FONT_SIZE_MEDIUM), 0x777777FF);
+				auto label = std::make_shared<RomPromptTextComponent>(mWindow, romName, Font::get(FONT_SIZE_MEDIUM), 0x777777FF);
 
 				row.addElement(star, false, false);
 				row.addElement(label, true);
