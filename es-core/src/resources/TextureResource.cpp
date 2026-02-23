@@ -7,7 +7,7 @@ TextureDataManager		TextureResource::sTextureDataManager;
 std::map< TextureResource::TextureKeyType, std::weak_ptr<TextureResource> > TextureResource::sTextureMap;
 std::set<TextureResource*> 	TextureResource::sAllTextures;
 
-TextureResource::TextureResource(const std::string& path, bool tile, bool dynamic) : mTextureData(nullptr), mSize(0.0f, 0.0f), mSourceSize(0.0f, 0.0f), mForceLoad(false)
+TextureResource::TextureResource(const std::string& path, bool tile, bool dynamic, bool block) : mTextureData(nullptr), mSize(0.0f, 0.0f), mSourceSize(0.0f, 0.0f), mForceLoad(false)
 {
 	// Create a texture data object for this texture
 	if (!path.empty())
@@ -19,20 +19,24 @@ TextureResource::TextureResource(const std::string& path, bool tile, bool dynami
 		{
 			data = sTextureDataManager.add(this, tile);
 			data->initFromPath(path);
-			// Force the texture manager to load it using a blocking load
-			sTextureDataManager.load(data, true);
+			// Load the texture - either blocking or async via the background thread
+			sTextureDataManager.load(data, block);
 		}
 		else
 		{
 			mTextureData = std::shared_ptr<TextureData>(new TextureData(tile));
 			data = mTextureData;
 			data->initFromPath(path);
-			// Load it so we can read the width/height
+			// Non-dynamic textures are always loaded immediately (blocking)
 			data->load();
 		}
 
-		mSize = Vector2i((int)data->width(), (int)data->height());
-		mSourceSize = Vector2f(data->sourceWidth(), data->sourceHeight());
+		if (block || !dynamic)
+		{
+			mSize = Vector2i((int)data->width(), (int)data->height());
+			mSourceSize = Vector2f(data->sourceWidth(), data->sourceHeight());
+		}
+		// When block=false && dynamic, sizes stay at (0,0) until updateTextureSize() is called
 	}
 	else
 	{
@@ -100,7 +104,7 @@ bool TextureResource::bind()
 	}
 }
 
-std::shared_ptr<TextureResource> TextureResource::get(const std::string& path, bool tile, bool forceLoad, bool dynamic)
+std::shared_ptr<TextureResource> TextureResource::get(const std::string& path, bool tile, bool forceLoad, bool dynamic, bool block)
 {
 	std::shared_ptr<ResourceManager>& rm = ResourceManager::getInstance();
 
@@ -122,7 +126,7 @@ std::shared_ptr<TextureResource> TextureResource::get(const std::string& path, b
 
 	// need to create it
 	std::shared_ptr<TextureResource> tex;
-	tex = std::shared_ptr<TextureResource>(new TextureResource(key.first, tile, dynamic));
+	tex = std::shared_ptr<TextureResource>(new TextureResource(key.first, tile, dynamic, block));
 	std::shared_ptr<TextureData> data = sTextureDataManager.get(tex.get());
 
 	// is it an SVG?
@@ -162,6 +166,31 @@ void TextureResource::rasterizeAt(size_t width, size_t height)
 Vector2f TextureResource::getSourceImageSize() const
 {
 	return mSourceSize;
+}
+
+bool TextureResource::updateTextureSize()
+{
+	// If sizes are already known, nothing to do
+	if (mSize != Vector2i(0, 0))
+		return true;
+
+	// Get the texture data without triggering a load
+	std::shared_ptr<TextureData> data;
+	if (mTextureData != nullptr)
+		data = mTextureData;
+	else
+		data = sTextureDataManager.get(this, false);
+
+	if (data && data->isLoaded())
+	{
+		// The background thread has finished loading - read dimensions now
+		// (safe because isLoaded() guarantees data is available via mutex ordering)
+		mSize = Vector2i((int)data->width(), (int)data->height());
+		mSourceSize = Vector2f(data->sourceWidth(), data->sourceHeight());
+		return true;
+	}
+
+	return false;
 }
 
 bool TextureResource::isInitialized() const

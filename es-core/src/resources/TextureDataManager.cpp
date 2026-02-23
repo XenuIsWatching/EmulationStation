@@ -39,6 +39,8 @@ void TextureDataManager::remove(const TextureResource* key)
 	auto it = mTextureLookup.find(key);
 	if (it != mTextureLookup.cend())
 	{
+		// Cancel any pending async load for this texture
+		mLoader->remove(*(*it).second);
 		// Remove the list entry
 		mTextures.erase((*it).second);
 		// And the lookup

@@ -135,6 +135,17 @@ void VideoComponent::setImage(std::string path)
 	mStaticImagePath = path;
 }
 
+void VideoComponent::setImageAsync(std::string path)
+{
+	// Check that the image has changed
+	if (path == mStaticImagePath)
+		return;
+
+	mStaticImage.setImageAsync(path);
+	mFadeIn = 0.0f;
+	mStaticImagePath = path;
+}
+
 void VideoComponent::setDefaultVideo()
 {
 	setVideo(mConfig.defaultVideoPath);
