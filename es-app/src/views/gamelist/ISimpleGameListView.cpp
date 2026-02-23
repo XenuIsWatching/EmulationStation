@@ -147,10 +147,9 @@ namespace
 				return;
 
 			const std::string launchPath = roms[index].path;
-			Window* window = mWindow;
-			delete this;
-
-			source->launchGame(window, launchPath);
+			// Keep this popup alive so returning from gameplay lands back on the
+			// same ROM selection screen and highlighted row.
+			source->launchGame(mWindow, launchPath);
 			ViewController::get()->onFileChanged(source, FILE_METADATA_CHANGED);
 			if(selectedEntry != source)
 				ViewController::get()->onFileChanged(selectedEntry, FILE_METADATA_CHANGED);
