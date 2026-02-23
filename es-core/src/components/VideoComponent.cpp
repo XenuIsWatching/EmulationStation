@@ -135,6 +135,17 @@ void VideoComponent::setImage(std::string path)
 	mStaticImagePath = path;
 }
 
+void VideoComponent::setImageAsync(std::string path)
+{
+	// Check that the image has changed
+	if (path == mStaticImagePath)
+		return;
+
+	mStaticImage.setImageAsync(path);
+	mFadeIn = 0.0f;
+	mStaticImagePath = path;
+}
+
 void VideoComponent::setDefaultVideo()
 {
 	setVideo(mConfig.defaultVideoPath);
@@ -266,6 +277,10 @@ void VideoComponent::startVideoWithDelay()
 void VideoComponent::update(int deltaTime)
 {
 	manageState();
+
+	// mStaticImage is not a child, so we must pump its update manually
+	// to let its async-load polling (mAsyncPending) resolve.
+	mStaticImage.update(deltaTime);
 
 	// If the video start is delayed and there is less than the fade time then set the image fade
 	// accordingly
