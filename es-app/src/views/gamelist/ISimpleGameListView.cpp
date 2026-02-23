@@ -147,12 +147,22 @@ namespace
 				return;
 
 			const std::string launchPath = roms[index].path;
+			std::shared_ptr<IGameListView> currentGameList = ViewController::get()->getGameListView(selectedEntry->getSystem());
+			if(currentGameList)
+				currentGameList->onHide();
+
 			// Keep this popup alive so returning from gameplay lands back on the
 			// same ROM selection screen and highlighted row.
 			source->launchGame(mWindow, launchPath);
 			ViewController::get()->onFileChanged(source, FILE_METADATA_CHANGED);
 			if(selectedEntry != source)
 				ViewController::get()->onFileChanged(selectedEntry, FILE_METADATA_CHANGED);
+
+			if(currentGameList)
+			{
+				currentGameList->setCursor(selectedEntry, true);
+				currentGameList->onShow();
+			}
 		}
 
 		void updatePreferredIndicator()
