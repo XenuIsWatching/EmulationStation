@@ -94,6 +94,15 @@ namespace
 			parent.append_child(tag).text().set(value.c_str());
 	}
 
+	void appendOptionalPathNode(pugi::xml_node& parent, const char* tag, const std::string& value, const std::string& relativeTo)
+	{
+		if(value.empty())
+			return;
+
+		std::string relValue = Utils::FileSystem::createRelativePath(value, relativeTo, true, true);
+		parent.append_child(tag).text().set(relValue.c_str());
+	}
+
 	std::string getGamePathForNode(const pugi::xml_node& gameNode, const std::string& relativeTo)
 	{
 		// New format can omit top-level <path>. In that case we choose the preferred
@@ -433,10 +442,10 @@ void addFileDataNode(pugi::xml_node& parent, const FileData* file, const char* t
 			appendMultiValueNode(romNode, "languages", "language", it->languages);
 			appendOptionalTextNode(romNode, "releasedate", it->releaseDate);
 			appendOptionalTextNode(romNode, "revision", it->revision);
-			appendOptionalTextNode(romNode, "image", it->image);
-			appendOptionalTextNode(romNode, "video", it->video);
-			appendOptionalTextNode(romNode, "thumbnail", it->thumbnail);
-			appendOptionalTextNode(romNode, "marquee", it->marquee);
+			appendOptionalPathNode(romNode, "image", it->image, system->getStartPath());
+			appendOptionalPathNode(romNode, "video", it->video, system->getStartPath());
+			appendOptionalPathNode(romNode, "thumbnail", it->thumbnail, system->getStartPath());
+			appendOptionalPathNode(romNode, "marquee", it->marquee, system->getStartPath());
 		}
 		return;
 	}
