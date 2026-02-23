@@ -147,9 +147,10 @@ namespace
 				return;
 
 			const std::string launchPath = roms[index].path;
+			Window* window = mWindow;
 			delete this;
 
-			source->launchGame(mWindow, launchPath);
+			source->launchGame(window, launchPath);
 			ViewController::get()->onFileChanged(source, FILE_METADATA_CHANGED);
 			if(selectedEntry != source)
 				ViewController::get()->onFileChanged(selectedEntry, FILE_METADATA_CHANGED);
