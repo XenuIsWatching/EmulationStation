@@ -86,7 +86,12 @@ size_t TextureDataManager::getTotalSize()
 {
 	size_t total = 0;
 	for (auto tex : mTextures)
-		total += tex->width() * tex->height() * 4;
+	{
+		// Only count textures whose dimensions are known — calling width()/height()
+		// on an unloaded texture triggers a synchronous load().
+		if (tex->isLoaded())
+			total += tex->width() * tex->height() * 4;
+	}
 	return total;
 }
 
@@ -222,12 +227,15 @@ void TextureLoader::remove(std::shared_ptr<TextureData> textureData)
 size_t TextureLoader::getQueueSize()
 {
 	// Gets the amount of video memory that will be used once all textures in
-	// the queue are loaded
+	// the queue are loaded.  Only count textures whose dimensions are already
+	// known — calling width()/height() on an unloaded texture triggers a
+	// synchronous load() which blocks the main thread on NAS I/O.
 	size_t mem = 0;
 	std::unique_lock<std::mutex> lock(mMutex);
 	for (auto tex : mTextureDataQ)
 	{
-		mem += tex->width() * tex->height() * 4;
+		if (tex->isLoaded())
+			mem += tex->width() * tex->height() * 4;
 	}
 	return mem;
 }
