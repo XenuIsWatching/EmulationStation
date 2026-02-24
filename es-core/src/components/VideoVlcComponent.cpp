@@ -40,7 +40,8 @@ static void display(void* /*data*/, void* /*id*/) {
 
 VideoVlcComponent::VideoVlcComponent(Window* window, std::string subtitles) :
 	VideoComponent(window),
-	mMediaPlayer(nullptr)
+	mMediaPlayer(nullptr),
+	mMediaParsing(false)
 {
 	memset(&mContext, 0, sizeof(mContext));
 
@@ -136,6 +137,9 @@ void VideoVlcComponent::render(const Transform4x4f& parentTrans)
 {
 	if (!isVisible())
 		return;
+
+	// Poll for async media parsing completion each frame
+	handleParsing();
 
 	VideoComponent::render(parentTrans);
 	Transform4x4f trans = parentTrans * getTransform();
@@ -233,7 +237,7 @@ void VideoVlcComponent::handleLooping()
 
 void VideoVlcComponent::startVideo()
 {
-	if (!mIsPlaying) {
+	if (!mIsPlaying && !mMediaParsing) {
 		mVideoWidth = 0;
 		mVideoHeight = 0;
 
@@ -252,76 +256,92 @@ void VideoVlcComponent::startVideo()
 			mMedia = libvlc_media_new_path(mVLC, path.c_str());
 			if (mMedia)
 			{
-				unsigned track_count;
-				// Get the media metadata so we can find the aspect ratio
+				// Start async parse — we will poll for completion in handleParsing()
 				libvlc_media_parse_with_options(mMedia, libvlc_media_fetch_local, -1);
-				while (libvlc_media_get_parsed_status(mMedia) == 0)
-					;
-				libvlc_media_track_t** tracks;
-				track_count = libvlc_media_tracks_get(mMedia, &tracks);
-				for (unsigned track = 0; track < track_count; ++track)
+				mMediaParsing = true;
+			}
+		}
+	}
+}
+
+void VideoVlcComponent::handleParsing()
+{
+	if (!mMediaParsing || !mMedia)
+		return;
+
+	// Poll — not yet parsed, come back next frame
+	if (libvlc_media_get_parsed_status(mMedia) == 0)
+		return;
+
+	mMediaParsing = false;
+	onMediaParsed();
+}
+
+void VideoVlcComponent::onMediaParsed()
+{
+	unsigned track_count;
+	libvlc_media_track_t** tracks;
+	track_count = libvlc_media_tracks_get(mMedia, &tracks);
+	for (unsigned track = 0; track < track_count; ++track)
+	{
+		if (tracks[track]->i_type == libvlc_track_video)
+		{
+			mVideoWidth = tracks[track]->video->i_width;
+			mVideoHeight = tracks[track]->video->i_height;
+			break;
+		}
+	}
+	libvlc_media_tracks_release(tracks, track_count);
+
+	// Make sure we found a valid video track
+	if ((mVideoWidth > 0) && (mVideoHeight > 0))
+	{
+		if (mScreensaverMode)
+		{
+			std::string resolution = Settings::getInstance()->getString("VlcScreenSaverResolution");
+			if(resolution != "original") {
+				float scale = 1;
+				if (resolution == "low")
+					// 25% of screen resolution
+					scale = 0.25;
+				if (resolution == "medium")
+					// 50% of screen resolution
+					scale = 0.5;
+				if (resolution == "high")
+					// 75% of screen resolution
+					scale = 0.75;
+
+				Vector2f resizeScale((Renderer::getScreenWidth() / (float)mVideoWidth) * scale, (Renderer::getScreenHeight() / (float)mVideoHeight) * scale);
+
+				if(resizeScale.x() < resizeScale.y())
 				{
-					if (tracks[track]->i_type == libvlc_track_video)
-					{
-						mVideoWidth = tracks[track]->video->i_width;
-						mVideoHeight = tracks[track]->video->i_height;
-						break;
-					}
-				}
-				libvlc_media_tracks_release(tracks, track_count);
-
-				// Make sure we found a valid video track
-				if ((mVideoWidth > 0) && (mVideoHeight > 0))
-				{
-					if (mScreensaverMode)
-					{
-						std::string resolution = Settings::getInstance()->getString("VlcScreenSaverResolution");
-						if(resolution != "original") {
-							float scale = 1;
-							if (resolution == "low")
-								// 25% of screen resolution
-								scale = 0.25;
-							if (resolution == "medium")
-								// 50% of screen resolution
-								scale = 0.5;
-							if (resolution == "high")
-								// 75% of screen resolution
-								scale = 0.75;
-
-							Vector2f resizeScale((Renderer::getScreenWidth() / (float)mVideoWidth) * scale, (Renderer::getScreenHeight() / (float)mVideoHeight) * scale);
-
-							if(resizeScale.x() < resizeScale.y())
-							{
-								mVideoWidth = (unsigned int) (mVideoWidth * resizeScale.x());
-								mVideoHeight = (unsigned int) (mVideoHeight * resizeScale.x());
-							}else{
-								mVideoWidth = (unsigned int) (mVideoWidth * resizeScale.y());
-								mVideoHeight = (unsigned int) (mVideoHeight * resizeScale.y());
-							}
-						}
-					}
-					else
-					{
-						remove(getTitlePath().c_str());
-					}
-					PowerSaver::pause();
-					setupContext();
-
-					// Setup the media player
-					mMediaPlayer = libvlc_media_player_new_from_media(mMedia);
-
-					setMuteMode();
-
-					libvlc_media_player_play(mMediaPlayer);
-					libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, (void*)&mContext);
-					libvlc_video_set_format(mMediaPlayer, "RGBA", (int)mVideoWidth, (int)mVideoHeight, (int)mVideoWidth * 4);
-
-					// Update the playing state
-					mIsPlaying = true;
-					mFadeIn = 0.0f;
+					mVideoWidth = (unsigned int) (mVideoWidth * resizeScale.x());
+					mVideoHeight = (unsigned int) (mVideoHeight * resizeScale.x());
+				}else{
+					mVideoWidth = (unsigned int) (mVideoWidth * resizeScale.y());
+					mVideoHeight = (unsigned int) (mVideoHeight * resizeScale.y());
 				}
 			}
 		}
+		else
+		{
+			remove(getTitlePath().c_str());
+		}
+		PowerSaver::pause();
+		setupContext();
+
+		// Setup the media player
+		mMediaPlayer = libvlc_media_player_new_from_media(mMedia);
+
+		setMuteMode();
+
+		libvlc_media_player_play(mMediaPlayer);
+		libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, (void*)&mContext);
+		libvlc_video_set_format(mMediaPlayer, "RGBA", (int)mVideoWidth, (int)mVideoHeight, (int)mVideoWidth * 4);
+
+		// Update the playing state
+		mIsPlaying = true;
+		mFadeIn = 0.0f;
 	}
 }
 
@@ -329,6 +349,15 @@ void VideoVlcComponent::stopVideo()
 {
 	mIsPlaying = false;
 	mStartDelayed = false;
+	mPlayingVideoPath = "";
+	// If we were mid-parse with no player yet, cancel the parse and release the media
+	if (mMediaParsing && mMedia)
+	{
+		libvlc_media_parse_stop(mMedia);
+		libvlc_media_release(mMedia);
+		mMedia = nullptr;
+	}
+	mMediaParsing = false;
 	// Release the media player so it stops calling back to us
 	if (mMediaPlayer)
 	{
