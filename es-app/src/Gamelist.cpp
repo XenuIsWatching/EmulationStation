@@ -1,6 +1,11 @@
 #include "Gamelist.h"
 
+#include <algorithm>
 #include <chrono>
+#include <fstream>
+#include <future>
+#include <mutex>
+#include <sstream>
 
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
@@ -11,6 +16,10 @@
 #include "SystemData.h"
 #include <pugixml.hpp>
 #include <unordered_map>
+
+// Async gamelist write infrastructure
+static std::mutex sGamelistWriteMutex;
+static std::vector<std::future<void>> sGamelistPendingWrites;
 
 namespace
 {
@@ -599,22 +608,59 @@ void updateGamelist(SystemData* system)
 		// now write the file
 
 		if (numUpdated > 0) {
-			const auto startTs = std::chrono::system_clock::now();
-
 			//make sure the folders leading up to this path exist (or the write will fail)
 			std::string xmlWritePath(system->getGamelistPath(true));
 			Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(xmlWritePath));
 
 			LOG(LogInfo) << "Added/Updated " << numUpdated << " entities in '" << xmlReadPath << "'";
 
-			if (!doc.save_file(xmlWritePath.c_str())) {
-				LOG(LogError) << "Error saving gamelist.xml to \"" << xmlWritePath << "\" (for system " << system->getName() << ")!";
-			}
+			// Serialize the XML document to a string on the main thread,
+			// then write the string to file on a background thread to
+			// avoid blocking the UI on slow NAS I/O.
+			std::stringstream ss;
+			doc.save(ss);
+			std::string xmlContent = ss.str();
+			std::string sysName = system->getName();
 
-			const auto endTs = std::chrono::system_clock::now();
-			LOG(LogInfo) << "Saved gamelist.xml for system \"" << system->getName() << "\" in " << std::chrono::duration_cast<std::chrono::milliseconds>(endTs - startTs).count() << " ms";
+			{
+				// Clean up finished futures
+				std::lock_guard<std::mutex> lock(sGamelistWriteMutex);
+				sGamelistPendingWrites.erase(
+					std::remove_if(sGamelistPendingWrites.begin(), sGamelistPendingWrites.end(),
+						[](std::future<void>& f) {
+							return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+						}),
+					sGamelistPendingWrites.end());
+
+				sGamelistPendingWrites.push_back(std::async(std::launch::async,
+					[xmlContent, xmlWritePath, sysName]() {
+						const auto startTs = std::chrono::system_clock::now();
+
+						std::ofstream outFile(xmlWritePath, std::ios::out | std::ios::trunc);
+						if (outFile.is_open()) {
+							outFile << xmlContent;
+							outFile.close();
+						} else {
+							LOG(LogError) << "Error saving gamelist.xml to \"" << xmlWritePath << "\" (for system " << sysName << ")!";
+						}
+
+						const auto endTs = std::chrono::system_clock::now();
+						LOG(LogInfo) << "Saved gamelist.xml for system \"" << sysName << "\" in " << std::chrono::duration_cast<std::chrono::milliseconds>(endTs - startTs).count() << " ms";
+					}));
+			}
 		}
 	}else{
 		LOG(LogError) << "Found no root folder for system \"" << system->getName() << "\"!";
 	}
+}
+
+void waitForGamelistWrites()
+{
+	std::lock_guard<std::mutex> lock(sGamelistWriteMutex);
+	for (auto& f : sGamelistPendingWrites)
+	{
+		if (f.valid())
+			f.wait();
+	}
+	sGamelistPendingWrites.clear();
 }
