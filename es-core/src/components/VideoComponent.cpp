@@ -239,8 +239,6 @@ void VideoComponent::handleStartDelay()
 		}
 		// Completed
 		mStartDelayed = false;
-		// Clear the playing flag so startVideo works
-		mIsPlaying = false;
 		startVideo();
 	}
 }
@@ -251,8 +249,8 @@ void VideoComponent::handleLooping()
 
 void VideoComponent::startVideoWithDelay()
 {
-	// If not playing then either start the video or initiate the delay
-	if (!mIsPlaying)
+	// If not playing and not already preparing to play, start the process
+	if (!mIsPlaying && mPlayingVideoPath.empty())
 	{
 		// Set the video that we are going to be playing so we don't attempt to restart it
 		mPlayingVideoPath = mVideoPath;
@@ -270,7 +268,6 @@ void VideoComponent::startVideoWithDelay()
 			mFadeIn = 0.0f;
 			mStartTime = SDL_GetTicks() + mConfig.startDelay;
 		}
-		mIsPlaying = true;
 	}
 }
 
@@ -313,8 +310,8 @@ void VideoComponent::manageState()
 	// is not active and the component is visible
 	bool show = mShowing && !mScreensaverActive && !mDisable && mVisible;
 
-	// See if we're already playing
-	if (mIsPlaying)
+	// See if we're already playing (or mid-parse preparing to play)
+	if (mIsPlaying || mPlayingVideoPath.length() > 0)
 	{
 		// If we are not on display then stop the video from playing
 		if (!show)
@@ -332,7 +329,7 @@ void VideoComponent::manageState()
 		}
 	}
 	// Need to recheck variable rather than 'else' because it may be modified above
-	if (!mIsPlaying)
+	if (!mIsPlaying && mPlayingVideoPath.empty())
 	{
 		// If we are on display then see if we should start the video
 		if (show && !mVideoPath.empty())
