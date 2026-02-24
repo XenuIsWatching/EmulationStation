@@ -9,6 +9,7 @@
 #include "Log.h"
 #include "Settings.h"
 #include "SystemData.h"
+#include <algorithm>
 #include <pugixml.hpp>
 #include <unordered_map>
 
@@ -129,6 +130,49 @@ namespace
 			return Utils::FileSystem::resolveRelativePath(firstRom.child("path").text().get(), relativeTo, false, true);
 
 		return "";
+	}
+
+	std::vector<std::string> getNormalizedRomPathSet(const pugi::xml_node& gameNode, const std::string& relativeTo)
+	{
+		std::vector<std::string> paths;
+		for(pugi::xml_node romNode = gameNode.child("roms").child("rom"); romNode; romNode = romNode.next_sibling("rom"))
+		{
+			std::string path = Utils::FileSystem::resolveRelativePath(romNode.child("path").text().get(), relativeTo, false, true);
+			if(!path.empty())
+				paths.push_back(path);
+		}
+
+		if(paths.empty())
+		{
+			std::string canonicalPath = getGamePathForNode(gameNode, relativeTo);
+			if(!canonicalPath.empty())
+				paths.push_back(canonicalPath);
+		}
+
+		std::sort(paths.begin(), paths.end());
+		paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+		return paths;
+	}
+
+	std::vector<std::string> getNormalizedRomPathSet(const FileData* game)
+	{
+		std::vector<std::string> paths;
+		if(game == NULL)
+			return paths;
+
+		const std::vector<RomData>& roms = game->getRoms();
+		for(auto it = roms.cbegin(); it != roms.cend(); ++it)
+		{
+			if(!it->path.empty())
+				paths.push_back(it->path);
+		}
+
+		if(paths.empty() && !game->getPath().empty())
+			paths.push_back(game->getPath());
+
+		std::sort(paths.begin(), paths.end());
+		paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+		return paths;
 	}
 }
 
@@ -551,6 +595,12 @@ void updateGamelist(SystemData* system)
 			const char* tag = tagList[i];
 			FileType nodeType = typeList[i];
 			std::vector<FileData*> changes = changedList[i];
+			std::unordered_map<FileData*, std::vector<std::string> > changedGameRomPathSets;
+			if(nodeType == GAME)
+			{
+				for(std::vector<FileData*>::const_iterator cfit = changes.cbegin(); cfit != changes.cend(); ++cfit)
+					changedGameRomPathSets[*cfit] = getNormalizedRomPathSet(*cfit);
+			}
 
 			// check for changed items of this type
 			if (changes.size() > 0) {
@@ -562,12 +612,16 @@ void updateGamelist(SystemData* system)
 					pugi::xml_node nextNode = fileNode.next_sibling(tag);
 
 					std::string xmlpath;
+					std::vector<std::string> xmlRomPathSet;
 					if(nodeType == GAME)
+					{
 						xmlpath = getGamePathForNode(fileNode, relativeTo);
+						xmlRomPathSet = getNormalizedRomPathSet(fileNode, relativeTo);
+					}
 					else
 						xmlpath = Utils::FileSystem::resolveRelativePath(fileNode.child("path").text().get(), relativeTo, false, true);
 
-					if(xmlpath.empty())
+					if(xmlpath.empty() && (nodeType != GAME || xmlRomPathSet.empty()))
 					{
 						fileNode = nextNode;
 						continue;
@@ -575,7 +629,16 @@ void updateGamelist(SystemData* system)
 
 					for(std::vector<FileData*>::const_iterator cfit = changes.cbegin(); cfit != changes.cend(); ++cfit)
 					{
-						if(xmlpath == (*cfit)->getPath())
+						bool matchByPath = !xmlpath.empty() && xmlpath == (*cfit)->getPath();
+						bool matchByRomSet = false;
+						if(nodeType == GAME && !xmlRomPathSet.empty())
+						{
+							auto changedSetIt = changedGameRomPathSets.find(*cfit);
+							if(changedSetIt != changedGameRomPathSets.end() && !changedSetIt->second.empty())
+								matchByRomSet = (xmlRomPathSet == changedSetIt->second);
+						}
+
+						if(matchByPath || matchByRomSet)
 						{
 							// found it
 							root.remove_child(fileNode);
