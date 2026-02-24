@@ -278,6 +278,10 @@ void VideoComponent::update(int deltaTime)
 {
 	manageState();
 
+	// mStaticImage is not a child, so we must pump its update manually
+	// to let its async-load polling (mAsyncPending) resolve.
+	mStaticImage.update(deltaTime);
+
 	// If the video start is delayed and there is less than the fade time then set the image fade
 	// accordingly
 	if (mStartDelayed)

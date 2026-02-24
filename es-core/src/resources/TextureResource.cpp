@@ -132,7 +132,9 @@ std::shared_ptr<TextureResource> TextureResource::get(const std::string& path, b
 	// need to create it
 	std::shared_ptr<TextureResource> tex;
 	tex = std::shared_ptr<TextureResource>(new TextureResource(key.first, tile, dynamic, block));
-	std::shared_ptr<TextureData> data = sTextureDataManager.get(tex.get());
+	// When block=false, pass enableLoading=false to avoid re-triggering a synchronous
+	// load — the constructor already queued it for async loading via TextureLoader.
+	std::shared_ptr<TextureData> data = sTextureDataManager.get(tex.get(), block);
 
 	// is it an SVG?
 	if(key.first.substr(key.first.size() - 4, std::string::npos) != ".svg")

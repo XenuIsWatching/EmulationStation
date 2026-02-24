@@ -169,9 +169,12 @@ void ImageComponent::setImageAsync(std::string path, bool tile)
 {
 	mAsyncPending = false;
 
-	if(path.empty() || !ResourceManager::getInstance()->fileExists(path))
+	// Skip the fileExists() check used by setImage() — it calls stat64 which blocks
+	// on NAS. Instead, just hand the path to TextureResource and let the background
+	// thread's load() handle missing files gracefully.
+	if(path.empty())
 	{
-		if(mDefaultPath.empty() || !ResourceManager::getInstance()->fileExists(mDefaultPath))
+		if(mDefaultPath.empty())
 			mTexture.reset();
 		else
 			mTexture = TextureResource::get(mDefaultPath, tile, mForceLoad, mDynamic, false);
@@ -184,13 +187,19 @@ void ImageComponent::setImageAsync(std::string path, bool tile)
 		// Check if the texture is already loaded (e.g. cache hit)
 		if(mTexture->updateTextureSize())
 		{
+			LOG(LogDebug) << "setImageAsync: immediate load for " << path;
 			resize();
 		}
 		else
 		{
 			// Texture is loading in background - resize() will be called from update() when ready
+			LOG(LogDebug) << "setImageAsync: queued async for " << path;
 			mAsyncPending = true;
 		}
+	}
+	else
+	{
+		LOG(LogDebug) << "setImageAsync: no texture for " << path;
 	}
 }
 
@@ -202,6 +211,7 @@ void ImageComponent::update(int deltaTime)
 	{
 		if(mTexture->updateTextureSize())
 		{
+			LOG(LogDebug) << "ImageComponent::update: async load complete, calling resize. size=" << mTexture->getSize().x() << "x" << mTexture->getSize().y();
 			mAsyncPending = false;
 			resize();
 		}
@@ -372,7 +382,7 @@ void ImageComponent::render(const Transform4x4f& parentTrans)
 	Transform4x4f trans = parentTrans * getTransform();
 	Renderer::setMatrix(trans);
 
-	if(mTexture && mOpacity > 0)
+	if(mTexture && mOpacity > 0 && !mAsyncPending)
 	{
 		if(Settings::getInstance()->getBool("DebugImage")) {
 			Vector2f targetSizePos = (mTargetSize - mSize) * mOrigin * -1;
@@ -392,6 +402,13 @@ void ImageComponent::render(const Transform4x4f& parentTrans)
 			LOG(LogError) << "Image texture is not initialized!";
 			mTexture.reset();
 		}
+	}
+	else if(mTexture && mAsyncPending)
+	{
+		// Debug: log when we're skipping render due to async pending
+		static int skipCount = 0;
+		if(++skipCount % 60 == 1) // log every ~1 second at 60fps
+			LOG(LogDebug) << "render: skipping due to mAsyncPending, mSize=" << mSize.x() << "x" << mSize.y() << " opacity=" << (int)mOpacity;
 	}
 
 	GuiComponent::renderChildren(trans);
