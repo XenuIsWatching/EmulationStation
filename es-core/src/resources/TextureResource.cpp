@@ -108,7 +108,12 @@ std::shared_ptr<TextureResource> TextureResource::get(const std::string& path, b
 {
 	std::shared_ptr<ResourceManager>& rm = ResourceManager::getInstance();
 
-	const std::string canonicalPath = Utils::FileSystem::getCanonicalPath(path);
+	// Avoid getCanonicalPath here — it calls stat64/lstat64 on every path component
+	// to resolve symlinks, which blocks the main thread for tens of ms per call on NAS.
+	// Use getGenericPath (pure string normalization) instead. Built-in resource paths
+	// starting with ":/" are passed through as-is (matching getCanonicalPath behavior).
+	const std::string canonicalPath = (path.size() >= 2 && path[0] == ':' && path[1] == '/')
+		? path : Utils::FileSystem::getGenericPath(path);
 	if(canonicalPath.empty())
 	{
 		std::shared_ptr<TextureResource> tex(new TextureResource("", tile, false));
