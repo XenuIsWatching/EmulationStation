@@ -138,6 +138,17 @@ private:
 	std::vector<FileData*> mFilteredChildren;
 	std::vector<RomData> mRoms;
 	std::string mSortDesc;
+
+	// Cached results of local-art filesystem probes (NAS paths).
+	// mutable so they can be filled on first access from const getters.
+	mutable std::string mLocalImageCache;
+	mutable bool        mLocalImageResolved = false;
+	mutable std::string mLocalThumbnailCache;
+	mutable bool        mLocalThumbnailResolved = false;
+	mutable std::string mLocalVideoCache;
+	mutable bool        mLocalVideoResolved = false;
+	mutable std::string mLocalMarqueeCache;
+	mutable bool        mLocalMarqueeResolved = false;
 };
 
 class CollectionFileData : public FileData

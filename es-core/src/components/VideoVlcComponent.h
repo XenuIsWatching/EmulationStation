@@ -3,6 +3,7 @@
 #define ES_CORE_COMPONENTS_VIDEO_VLC_COMPONENT_H
 
 #include "VideoComponent.h"
+#include <thread>
 
 struct SDL_mutex;
 struct SDL_Surface;
@@ -75,6 +76,11 @@ private:
 	VideoContext					mContext;
 	std::shared_ptr<TextureResource> mTexture;
 	bool							mMediaParsing;
+
+	// Background thread that runs libvlc_media_player_new_from_media() to avoid
+	// blocking the render loop on PulseAudio initialisation.
+	// Captures 'this' — must be joined before the object is destroyed.
+	std::thread						mPlayerThread;
 };
 
 #endif // ES_CORE_COMPONENTS_VIDEO_VLC_COMPONENT_H

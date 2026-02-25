@@ -330,18 +330,31 @@ void VideoVlcComponent::onMediaParsed()
 		PowerSaver::pause();
 		setupContext();
 
-		// Setup the media player
-		mMediaPlayer = libvlc_media_player_new_from_media(mMedia);
+		// Read settings on the main thread before handing off to the player thread.
+		libvlc_media_t* media  = mMedia;
+		unsigned int    width  = mVideoWidth;
+		unsigned int    height = mVideoHeight;
+		bool mute = !Settings::getInstance()->getBool("VideoAudio") ||
+		            (Settings::getInstance()->getBool("ScreenSaverVideoMute") && mScreensaverMode);
 
-		setMuteMode();
+		// Join any previous player-creation thread before launching a new one.
+		if (mPlayerThread.joinable())
+			mPlayerThread.join();
 
-		libvlc_media_player_play(mMediaPlayer);
-		libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, (void*)&mContext);
-		libvlc_video_set_format(mMediaPlayer, "RGBA", (int)mVideoWidth, (int)mVideoHeight, (int)mVideoWidth * 4);
-
-		// Update the playing state
-		mIsPlaying = true;
-		mFadeIn = 0.0f;
+		// libvlc_media_player_new_from_media() initialises the audio output (PulseAudio)
+		// on first use and can block for hundreds of milliseconds. Run it on a background
+		// thread so the render loop stays responsive. mIsPlaying is set last so render()
+		// only starts drawing once the player is fully configured.
+		mPlayerThread = std::thread([this, media, width, height, mute]() {
+			if (mute)
+				libvlc_media_add_option(media, ":no-audio");
+			mMediaPlayer = libvlc_media_player_new_from_media(media);
+			libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, (void*)&mContext);
+			libvlc_video_set_format(mMediaPlayer, "RGBA", (int)width, (int)height, (int)width * 4);
+			libvlc_media_player_play(mMediaPlayer);
+			mFadeIn    = 0.0f;
+			mIsPlaying = true;
+		});
 	}
 }
 
@@ -350,6 +363,13 @@ void VideoVlcComponent::stopVideo()
 	mIsPlaying = false;
 	mStartDelayed = false;
 	mPlayingVideoPath = "";
+
+	// mPlayerThread captures 'this' — must be joined before modifying shared state
+	// or destroying the object. In practice, once PulseAudio is warm this is instant;
+	// only the very first player creation may add a brief join here.
+	if (mPlayerThread.joinable())
+		mPlayerThread.join();
+
 	// If we were mid-parse with no player yet, cancel the parse and release the media
 	if (mMediaParsing && mMedia)
 	{
@@ -358,15 +378,41 @@ void VideoVlcComponent::stopVideo()
 		mMedia = nullptr;
 	}
 	mMediaParsing = false;
+
 	// Release the media player so it stops calling back to us
 	if (mMediaPlayer)
 	{
-		libvlc_media_player_stop(mMediaPlayer);
-		libvlc_media_player_release(mMediaPlayer);
-		libvlc_media_release(mMedia);
-		mMediaPlayer = NULL;
-		freeContext();
+		libvlc_media_player_t* player   = mMediaPlayer;
+		libvlc_media_t*        media    = mMedia;
+		SDL_Surface*           surface  = mContext.surface;
+		SDL_mutex*             sdlMutex = mContext.mutex;
+		bool                   hadCtx   = mContext.valid;
+
+		// Stop ES from rendering this frame immediately.
+		// We intentionally leave mContext.surface/mutex pointing at the SDL objects
+		// until libvlc_media_player_stop() returns, because VLC's render thread may
+		// still call lock()/unlock() up until that point.
+		mContext.valid = false;
+		mMediaPlayer   = nullptr;
+		mMedia         = nullptr;
+
 		PowerSaver::resume();
+
+		// libvlc_media_player_stop() blocks via pthread_join until VLC's input thread
+		// exits — move it off the main thread so the render loop stays responsive.
+		// The lambda captures only VLC/SDL heap objects (not 'this'), so it is safe
+		// to detach: it will not access any VideoVlcComponent members.
+		std::thread([player, media, surface, sdlMutex, hadCtx]() {
+			libvlc_media_player_stop(player);   // VLC guarantees no more callbacks after this
+			libvlc_media_player_release(player);
+			if (media)
+				libvlc_media_release(media);
+			if (hadCtx)
+			{
+				SDL_FreeSurface(surface);
+				SDL_DestroyMutex(sdlMutex);
+			}
+		}).detach();
 	}
 }
 

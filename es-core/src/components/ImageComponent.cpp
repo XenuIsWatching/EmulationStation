@@ -135,9 +135,11 @@ void ImageComponent::setImage(std::string path, bool tile)
 {
 	mAsyncPending = false;
 
-	if(path.empty() || !ResourceManager::getInstance()->fileExists(path))
+	// Skip fileExists() — it calls stat64 which blocks on NAS paths.
+	// TextureData::load() handles missing files gracefully (returns empty texture).
+	if(path.empty())
 	{
-		if(mDefaultPath.empty() || !ResourceManager::getInstance()->fileExists(mDefaultPath))
+		if(mDefaultPath.empty())
 			mTexture.reset();
 		else
 			mTexture = TextureResource::get(mDefaultPath, tile, mForceLoad, mDynamic);
