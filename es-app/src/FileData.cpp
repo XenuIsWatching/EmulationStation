@@ -61,19 +61,24 @@ const std::string FileData::getThumbnailPath() const
 	{
 		thumbnail = metadata.get("image");
 
-		// no image, try to use local image
+		// no image, try to use local image (result cached to avoid repeated NAS stat())
 		if(thumbnail.empty() && Settings::getInstance()->getBool("LocalArt"))
 		{
-			const char* extList[2] = { ".png", ".jpg" };
-			for(int i = 0; i < 2; i++)
+			if (!mLocalThumbnailResolved)
 			{
-				if(thumbnail.empty())
+				mLocalThumbnailResolved = true;
+				const char* extList[2] = { ".png", ".jpg" };
+				for(int i = 0; i < 2; i++)
 				{
-					std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-image" + extList[i];
-					if(Utils::FileSystem::exists(path))
-						thumbnail = path;
+					if(mLocalThumbnailCache.empty())
+					{
+						std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-image" + extList[i];
+						if(Utils::FileSystem::exists(path))
+							mLocalThumbnailCache = path;
+					}
 				}
 			}
+			thumbnail = mLocalThumbnailCache;
 		}
 	}
 
@@ -117,12 +122,17 @@ const std::string FileData::getVideoPath() const
 {
 	std::string video = metadata.get("video");
 
-	// no video, try to use local video
+	// no video, try to use local video (result cached to avoid repeated NAS stat())
 	if(video.empty() && Settings::getInstance()->getBool("LocalArt"))
 	{
-		std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-video.mp4";
-		if(Utils::FileSystem::exists(path))
-			video = path;
+		if (!mLocalVideoResolved)
+		{
+			mLocalVideoResolved = true;
+			std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-video.mp4";
+			if(Utils::FileSystem::exists(path))
+				mLocalVideoCache = path;
+		}
+		video = mLocalVideoCache;
 	}
 
 	return video;
@@ -132,19 +142,24 @@ const std::string FileData::getMarqueePath() const
 {
 	std::string marquee = metadata.get("marquee");
 
-	// no marquee, try to use local marquee
+	// no marquee, try to use local marquee (result cached to avoid repeated NAS stat())
 	if(marquee.empty() && Settings::getInstance()->getBool("LocalArt"))
 	{
-		const char* extList[2] = { ".png", ".jpg" };
-		for(int i = 0; i < 2; i++)
+		if (!mLocalMarqueeResolved)
 		{
-			if(marquee.empty())
+			mLocalMarqueeResolved = true;
+			const char* extList[2] = { ".png", ".jpg" };
+			for(int i = 0; i < 2; i++)
 			{
-				std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-marquee" + extList[i];
-				if(Utils::FileSystem::exists(path))
-					marquee = path;
+				if(mLocalMarqueeCache.empty())
+				{
+					std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-marquee" + extList[i];
+					if(Utils::FileSystem::exists(path))
+						mLocalMarqueeCache = path;
+				}
 			}
 		}
+		marquee = mLocalMarqueeCache;
 	}
 
 	return marquee;
@@ -154,19 +169,24 @@ const std::string FileData::getImagePath() const
 {
 	std::string image = metadata.get("image");
 
-	// no image, try to use local image
+	// no image, try to use local image (result cached to avoid repeated NAS stat())
 	if(image.empty())
 	{
-		const char* extList[2] = { ".png", ".jpg" };
-		for(int i = 0; i < 2; i++)
+		if (!mLocalImageResolved)
 		{
-			if(image.empty())
+			mLocalImageResolved = true;
+			const char* extList[2] = { ".png", ".jpg" };
+			for(int i = 0; i < 2; i++)
 			{
-				std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-image" + extList[i];
-				if(Utils::FileSystem::exists(path))
-					image = path;
+				if(mLocalImageCache.empty())
+				{
+					std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-image" + extList[i];
+					if(Utils::FileSystem::exists(path))
+						mLocalImageCache = path;
+				}
 			}
 		}
+		image = mLocalImageCache;
 	}
 
 	return image;
