@@ -154,16 +154,12 @@ void DetailedGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& them
 		values[i]->applyTheme(theme, getName(), valElements[i], ALL ^ ThemeFlags::TEXT);
 	}
 
-	// Apply publisher-row colors + z-index to the ROM name row so it sorts correctly.
-	mLblRomName.applyTheme(theme, getName(), "md_lbl_publisher", ThemeFlags::COLOR | ThemeFlags::Z_INDEX);
-	mRomNameText.applyTheme(theme, getName(), "md_publisher", ThemeFlags::COLOR | ThemeFlags::Z_INDEX);
-	// Container has no matching theme element; set z-index directly.
-	mRomNameContainer.setZIndex(mLblRomName.getZIndex());
-
 	mDescription.setSize(mDescContainer.getSize().x(), 0);
 	mDescription.applyTheme(theme, getName(), "md_description", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION));
-	mLblRomName.applyTheme(theme, getName(), "md_lbl_playcount", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | ROTATION));
-	mRomNameText.applyTheme(theme, getName(), "md_playcount", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION));
+	mLblRomName.applyTheme(theme, getName(), "md_lbl_romname", ALL ^ ROTATION);
+	mRomNameContainer.applyTheme(theme, getName(), "md_romname", POSITION | ThemeFlags::SIZE | Z_INDEX | VISIBLE);
+	mRomNameText.applyTheme(theme, getName(), "md_romname", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION));
+	mRomNameContainer.setZIndex(mLblRomName.getZIndex());
 
 	sortChildren();
 }
