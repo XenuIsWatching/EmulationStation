@@ -243,8 +243,9 @@ void GridGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 
 	mDescription.setSize(mDescContainer.getSize().x(), 0);
 	mDescription.applyTheme(theme, getName(), "md_description", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION));
-	mLblRomName.applyTheme(theme, getName(), "md_lbl_playcount", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | ROTATION) | ThemeFlags::Z_INDEX);
-	mRomNameText.applyTheme(theme, getName(), "md_playcount", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION) | ThemeFlags::Z_INDEX);
+	mLblRomName.applyTheme(theme, getName(), "md_lbl_romname", ALL ^ ROTATION);
+	mRomNameContainer.applyTheme(theme, getName(), "md_romname", POSITION | ThemeFlags::SIZE | Z_INDEX | VISIBLE);
+	mRomNameText.applyTheme(theme, getName(), "md_romname", ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION));
 	mRomNameContainer.setZIndex(mLblRomName.getZIndex());
 
 	// Repopulate list in case new theme is displaying a different image.  Preserve selection.
