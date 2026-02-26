@@ -167,6 +167,12 @@ void ImageComponent::setImage(const std::shared_ptr<TextureResource>& texture)
 
 void ImageComponent::setImageAsync(std::string path, bool tile)
 {
+	if (!Settings::getInstance()->getBool("AsyncFileIO"))
+	{
+		setImage(path, tile);
+		return;
+	}
+
 	mAsyncPending = false;
 
 	// Skip the fileExists() check used by setImage() — it calls stat64 which blocks

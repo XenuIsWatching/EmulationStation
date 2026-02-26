@@ -1,6 +1,7 @@
 #include "components/VideoComponent.h"
 
 #include "resources/ResourceManager.h"
+#include "Settings.h"
 #include "utils/FileSystemUtil.h"
 #include "PowerSaver.h"
 #include "ThemeData.h"
@@ -141,7 +142,11 @@ void VideoComponent::setImageAsync(std::string path)
 	if (path == mStaticImagePath)
 		return;
 
-	mStaticImage.setImageAsync(path);
+	if (!Settings::getInstance()->getBool("AsyncFileIO"))
+		mStaticImage.setImage(path);
+	else
+		mStaticImage.setImageAsync(path);
+
 	mFadeIn = 0.0f;
 	mStaticImagePath = path;
 }

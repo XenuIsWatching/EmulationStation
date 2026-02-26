@@ -342,39 +342,50 @@ void updateGamelist(SystemData* system)
 
 			LOG(LogInfo) << "Added/Updated " << numUpdated << " entities in '" << xmlReadPath << "'";
 
-			// Serialize the XML document to a string on the main thread,
-			// then write the string to file on a background thread to
-			// avoid blocking the UI on slow NAS I/O.
-			std::stringstream ss;
-			doc.save(ss);
-			std::string xmlContent = ss.str();
-			std::string sysName = system->getName();
-
+			if (!Settings::getInstance()->getBool("AsyncFileIO"))
 			{
-				// Clean up finished futures
-				std::lock_guard<std::mutex> lock(sGamelistWriteMutex);
-				sGamelistPendingWrites.erase(
-					std::remove_if(sGamelistPendingWrites.begin(), sGamelistPendingWrites.end(),
-						[](std::future<void>& f) {
-							return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
-						}),
-					sGamelistPendingWrites.end());
+				const auto startTs = std::chrono::system_clock::now();
+				if (!doc.save_file(xmlWritePath.c_str()))
+					LOG(LogError) << "Error saving gamelist.xml to \"" << xmlWritePath << "\" (for system " << system->getName() << ")!";
+				const auto endTs = std::chrono::system_clock::now();
+				LOG(LogInfo) << "Saved gamelist.xml for system \"" << system->getName() << "\" in " << std::chrono::duration_cast<std::chrono::milliseconds>(endTs - startTs).count() << " ms";
+			}
+			else
+			{
+				// Serialize the XML document to a string on the main thread,
+				// then write the string to file on a background thread to
+				// avoid blocking the UI on slow NAS I/O.
+				std::stringstream ss;
+				doc.save(ss);
+				std::string xmlContent = ss.str();
+				std::string sysName = system->getName();
 
-				sGamelistPendingWrites.push_back(std::async(std::launch::async,
-					[xmlContent, xmlWritePath, sysName]() {
-						const auto startTs = std::chrono::system_clock::now();
+				{
+					// Clean up finished futures
+					std::lock_guard<std::mutex> lock(sGamelistWriteMutex);
+					sGamelistPendingWrites.erase(
+						std::remove_if(sGamelistPendingWrites.begin(), sGamelistPendingWrites.end(),
+							[](std::future<void>& f) {
+								return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+							}),
+						sGamelistPendingWrites.end());
 
-						std::ofstream outFile(xmlWritePath, std::ios::out | std::ios::trunc);
-						if (outFile.is_open()) {
-							outFile << xmlContent;
-							outFile.close();
-						} else {
-							LOG(LogError) << "Error saving gamelist.xml to \"" << xmlWritePath << "\" (for system " << sysName << ")!";
-						}
+					sGamelistPendingWrites.push_back(std::async(std::launch::async,
+						[xmlContent, xmlWritePath, sysName]() {
+							const auto startTs = std::chrono::system_clock::now();
 
-						const auto endTs = std::chrono::system_clock::now();
-						LOG(LogInfo) << "Saved gamelist.xml for system \"" << sysName << "\" in " << std::chrono::duration_cast<std::chrono::milliseconds>(endTs - startTs).count() << " ms";
-					}));
+							std::ofstream outFile(xmlWritePath, std::ios::out | std::ios::trunc);
+							if (outFile.is_open()) {
+								outFile << xmlContent;
+								outFile.close();
+							} else {
+								LOG(LogError) << "Error saving gamelist.xml to \"" << xmlWritePath << "\" (for system " << sysName << ")!";
+							}
+
+							const auto endTs = std::chrono::system_clock::now();
+							LOG(LogInfo) << "Saved gamelist.xml for system \"" << sysName << "\" in " << std::chrono::duration_cast<std::chrono::milliseconds>(endTs - startTs).count() << " ms";
+						}));
+				}
 			}
 		}
 	}else{
