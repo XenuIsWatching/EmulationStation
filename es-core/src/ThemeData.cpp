@@ -92,6 +92,9 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "horizontalMargin", RESOLUTION_FLOAT },
 		{ "forceUppercase", BOOLEAN },
 		{ "lineSpacing", FLOAT },
+		{ "favoriteIconPath", PATH },
+		{ "favoriteIconColor", COLOR },
+		{ "favoriteIconVisible", BOOLEAN },
 		{ "zIndex", FLOAT } } },
 	{ "container", {
 		{ "pos", RESOLUTION_PAIR },
