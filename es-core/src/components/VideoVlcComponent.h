@@ -3,6 +3,11 @@
 #define ES_CORE_COMPONENTS_VIDEO_VLC_COMPONENT_H
 
 #include "VideoComponent.h"
+#include <functional>
+#include <mutex>
+#include <condition_variable>
+#include <deque>
+#include <thread>
 
 struct SDL_mutex;
 struct SDL_Surface;
@@ -68,11 +73,21 @@ private:
 	// Second half of startVideo — runs after parsing finishes.
 	void onMediaParsed();
 
+	// Post a cleanup task to the shared background worker thread.
+	static void postCleanupTask(std::function<void()> task);
+
+	static void cleanupWorker();
+
 private:
 	static libvlc_instance_t*		mVLC;
+	static std::thread				sCleanupThread;
+	static std::mutex				sCleanupMutex;
+	static std::condition_variable	sCleanupCond;
+	static std::deque<std::function<void()>> sCleanupQueue;
+	static bool						sCleanupRunning;
 	libvlc_media_t*					mMedia;
 	libvlc_media_player_t*			mMediaPlayer;
-	VideoContext					mContext;
+	VideoContext*				mContext;
 	std::shared_ptr<TextureResource> mTexture;
 	bool							mMediaParsing;
 };
