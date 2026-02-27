@@ -451,6 +451,11 @@ void GuiMenu::openOtherSettings()
 	s->addWithLabel("PARSE GAMESLISTS ONLY", parse_gamelists);
 	s->addSaveFunc([parse_gamelists] { Settings::getInstance()->setBool("ParseGamelistOnly", parse_gamelists->getState()); });
 
+	auto threaded_loading = std::make_shared<SwitchComponent>(mWindow);
+	threaded_loading->setState(Settings::getInstance()->getBool("ThreadedLoading"));
+	s->addWithLabel("GAMESLISTS THREADED LOADING", threaded_loading);
+	s->addSaveFunc([threaded_loading] { Settings::getInstance()->setBool("ThreadedLoading", threaded_loading->getState()); });
+
 	auto async_file_io = std::make_shared<SwitchComponent>(mWindow);
 	async_file_io->setState(Settings::getInstance()->getBool("AsyncFileIO"));
 	s->addWithLabel("ASYNC FILE IO", async_file_io);
