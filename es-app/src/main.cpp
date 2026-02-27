@@ -473,6 +473,16 @@ int main(int argc, char* argv[])
 		window.render();
 		Renderer::swapBuffers();
 
+		// Frame rate cap - only effective when VSync is disabled
+		int targetFps = Settings::getInstance()->getInt("FrameRateCap");
+		if(targetFps > 0 && targetFps < 60)
+		{
+			int frameMs  = SDL_GetTicks() - curTime;
+			int targetMs = 1000 / targetFps;
+			if(frameMs < targetMs)
+				SDL_Delay(targetMs - frameMs);
+		}
+
 		Log::flush();
 	}
 

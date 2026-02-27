@@ -39,6 +39,8 @@ namespace Renderer
 	static GLint         posAttrib        = 0;
 	static GLuint        vertexBuffer     = 0;
 	static GLuint        whiteTexture     = 0;
+	static GLuint        fboId            = 0;
+	static GLuint        fboTexture       = 0;
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -94,7 +96,7 @@ namespace Renderer
 
 		// fragment shader
 		const GLchar* fragmentSource =
-			"precision highp float;     \n"
+			"precision mediump float;   \n"
 			"uniform   sampler2D u_tex; \n"
 			"varying   vec2      v_tex; \n"
 			"varying   vec4      v_col; \n"
@@ -311,6 +313,49 @@ namespace Renderer
 
 //////////////////////////////////////////////////////////////////////////
 
+	void createFbo()
+	{
+		// Only create FBO when render resolution differs from the window resolution
+		if(getRenderWidth() == getWindowWidth() && getRenderHeight() == getWindowHeight())
+			return;
+
+		GL_CHECK_ERROR(glGenFramebuffers(1, &fboId));
+		GL_CHECK_ERROR(glBindFramebuffer(GL_FRAMEBUFFER, fboId));
+
+		GL_CHECK_ERROR(glGenTextures(1, &fboTexture));
+		GL_CHECK_ERROR(glBindTexture(GL_TEXTURE_2D, fboTexture));
+		GL_CHECK_ERROR(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, getRenderWidth(), getRenderHeight(),
+		                            0, GL_RGB, GL_UNSIGNED_BYTE, nullptr));
+		GL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+		GL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+		GL_CHECK_ERROR(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+		                                      GL_TEXTURE_2D, fboTexture, 0));
+
+		if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+			LOG(LogError) << "Render scale FBO creation failed";
+
+		// Clear the FBO so the first frame has no garbage data
+		GL_CHECK_ERROR(glClear(GL_COLOR_BUFFER_BIT));
+
+		GL_CHECK_ERROR(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+		GL_CHECK_ERROR(glBindTexture(GL_TEXTURE_2D, 0));
+
+	} // createFbo
+
+//////////////////////////////////////////////////////////////////////////
+
+	void bindFboForScene()
+	{
+		if(fboId != 0)
+		{
+			GL_CHECK_ERROR(glBindFramebuffer(GL_FRAMEBUFFER, fboId));
+			GL_CHECK_ERROR(glViewport(0, 0, getRenderWidth(), getRenderHeight()));
+		}
+
+	} // bindFboForScene
+
+//////////////////////////////////////////////////////////////////////////
+
 	unsigned int createTexture(const Texture::Type _type, const bool _linear, const bool _repeat, const unsigned int _width, const unsigned int _height, const void* _data)
 	{
 		const GLenum type = convertTextureType(_type);
@@ -322,8 +367,8 @@ namespace Renderer
 		GL_CHECK_ERROR(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, _repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE));
 		GL_CHECK_ERROR(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, _repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE));
 
-		GL_CHECK_ERROR(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, _linear ? GL_LINEAR : GL_NEAREST));
-		GL_CHECK_ERROR(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+		GL_CHECK_ERROR(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, _linear ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST));
+		GL_CHECK_ERROR(glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, _linear ? GL_LINEAR : GL_NEAREST));
 
 		// Regular GL_ALPHA textures are black + alpha in shaders
 		// Create a GL_LUMINANCE_ALPHA texture instead so its white + alpha
@@ -345,6 +390,10 @@ namespace Renderer
 		{
 			GL_CHECK_ERROR(glTexImage2D(GL_TEXTURE_2D, 0, type, _width, _height, 0, type, GL_UNSIGNED_BYTE, _data));
 		}
+
+		// Generate mipmaps for linear-filtered textures with data (not empty font atlas textures)
+		if(_linear && _data != nullptr)
+			GL_CHECK_ERROR(glGenerateMipmap(GL_TEXTURE_2D));
 
 		return texture;
 
@@ -457,8 +506,8 @@ namespace Renderer
 
 	void setViewport(const Rect& _viewport)
 	{
-		// glViewport starts at the bottom left of the window
-		GL_CHECK_ERROR(glViewport( _viewport.x, getWindowHeight() - _viewport.y - _viewport.h, _viewport.w, _viewport.h));
+		// glViewport starts at the bottom left of the active framebuffer
+		GL_CHECK_ERROR(glViewport(_viewport.x, getRenderHeight() - _viewport.y - _viewport.h, _viewport.w, _viewport.h));
 
 	} // setViewport
 
@@ -472,8 +521,8 @@ namespace Renderer
 		}
 		else
 		{
-			// glScissor starts at the bottom left of the window
-			GL_CHECK_ERROR(glScissor(_scissor.x, getWindowHeight() - _scissor.y - _scissor.h, _scissor.w, _scissor.h));
+			// glScissor starts at the bottom left of the active framebuffer
+			GL_CHECK_ERROR(glScissor(_scissor.x, getRenderHeight() - _scissor.y - _scissor.h, _scissor.w, _scissor.h));
 			GL_CHECK_ERROR(glEnable(GL_SCISSOR_TEST));
 		}
 
@@ -504,6 +553,47 @@ namespace Renderer
 
 	void swapBuffers()
 	{
+		if(fboId != 0)
+		{
+			// Blit FBO contents to the default framebuffer (the native 4K window)
+			// via a textured full-screen quad, upscaling with GL_LINEAR filtering.
+			GL_CHECK_ERROR(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+			GL_CHECK_ERROR(glViewport(0, 0, getWindowWidth(), getWindowHeight()));
+			GL_CHECK_ERROR(glClear(GL_COLOR_BUFFER_BIT));
+			GL_CHECK_ERROR(glDisable(GL_SCISSOR_TEST));
+
+			// Build an ortho MVP for the window dimensions (Y-down, matching ES convention)
+			Transform4x4f upscaleMVP = Transform4x4f::Identity();
+			upscaleMVP.orthoProjection(0, (float)getWindowWidth(), (float)getWindowHeight(), 0, -1.0f, 1.0f);
+			GL_CHECK_ERROR(glUniformMatrix4fv(mvpUniform, 1, GL_FALSE, (float*)&upscaleMVP));
+
+			// Full-screen quad; V is flipped to correct for GL texture Y-origin vs ES Y-down
+			const float wW = (float)getWindowWidth();
+			const float wH = (float)getWindowHeight();
+			const Vertex verts[4] = {
+				{ {  0.0f, 0.0f }, { 0.0f, 1.0f }, 0xFFFFFFFF },
+				{ {  wW,   0.0f }, { 1.0f, 1.0f }, 0xFFFFFFFF },
+				{ {  0.0f, wH   }, { 0.0f, 0.0f }, 0xFFFFFFFF },
+				{ {  wW,   wH   }, { 1.0f, 0.0f }, 0xFFFFFFFF },
+			};
+
+			GL_CHECK_ERROR(glBindTexture(GL_TEXTURE_2D, fboTexture));
+			GL_CHECK_ERROR(glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_DYNAMIC_DRAW));
+			GL_CHECK_ERROR(glVertexAttribPointer(posAttrib, 2, GL_FLOAT,         GL_FALSE, sizeof(Vertex), (const void*)offsetof(Vertex, pos)));
+			GL_CHECK_ERROR(glVertexAttribPointer(texAttrib, 2, GL_FLOAT,         GL_FALSE, sizeof(Vertex), (const void*)offsetof(Vertex, tex)));
+			GL_CHECK_ERROR(glVertexAttribPointer(colAttrib, 4, GL_UNSIGNED_BYTE, GL_TRUE,  sizeof(Vertex), (const void*)offsetof(Vertex, col)));
+			GL_CHECK_ERROR(glBlendFunc(GL_ONE, GL_ZERO));
+			GL_CHECK_ERROR(glDrawArrays(GL_TRIANGLE_STRIP, 0, 4));
+
+			// Restore the scene MVP for the next frame
+			Transform4x4f mvpMatrix = projectionMatrix * worldViewMatrix;
+			GL_CHECK_ERROR(glUniformMatrix4fv(mvpUniform, 1, GL_FALSE, (float*)&mvpMatrix));
+
+			// Re-bind FBO for the next frame's scene rendering
+			GL_CHECK_ERROR(glBindFramebuffer(GL_FRAMEBUFFER, fboId));
+			GL_CHECK_ERROR(glViewport(0, 0, getRenderWidth(), getRenderHeight()));
+		}
+
 		SDL_GL_SwapWindow(getSDLWindow());
 		GL_CHECK_ERROR(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 

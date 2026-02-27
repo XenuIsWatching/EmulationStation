@@ -76,6 +76,8 @@ namespace Renderer
 	int         getScreenOffsetX();
 	int         getScreenOffsetY();
 	int         getScreenRotate ();
+	int         getRenderWidth  ();
+	int         getRenderHeight ();
 
 	// API specific
 	unsigned int convertColor      (const unsigned int _color);
@@ -83,6 +85,8 @@ namespace Renderer
 	void         setupWindow       ();
 	void         createContext     ();
 	void         destroyContext    ();
+	void         createFbo         ();
+	void         bindFboForScene   ();
 	unsigned int createTexture     (const Texture::Type _type, const bool _linear, const bool _repeat, const unsigned int _width, const unsigned int _height, const void* _data);
 	void         destroyTexture    (const unsigned int _texture);
 	void         updateTexture     (const unsigned int _texture, const Texture::Type _type, const unsigned int _x, const unsigned _y, const unsigned int _width, const unsigned int _height, const void* _data);

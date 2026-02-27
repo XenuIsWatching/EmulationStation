@@ -24,6 +24,8 @@ namespace Renderer
 	static int              screenOffsetY      = 0;
 	static int              screenRotate       = 0;
 	static bool             initialCursorState = 1;
+	static int              renderWidth        = 0;
+	static int              renderHeight       = 0;
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -60,6 +62,31 @@ namespace Renderer
 		}
 
 	} // setIcon
+
+//////////////////////////////////////////////////////////////////////////
+
+	static void setupRenderScale()
+	{
+		int scale = Settings::getInstance()->getInt("RenderScale");
+		if(scale <= 0 || scale >= 100)
+		{
+			renderWidth  = windowWidth;
+			renderHeight = windowHeight;
+			return;
+		}
+
+		renderWidth  = windowWidth  * scale / 100;
+		renderHeight = windowHeight * scale / 100;
+
+		// Override the logical canvas so all layout/font math targets the render resolution
+		screenWidth  = renderWidth;
+		screenHeight = renderHeight;
+
+		LOG(LogInfo) << "Render scale: " << scale << "% ("
+		             << renderWidth << "x" << renderHeight
+		             << " -> " << windowWidth << "x" << windowHeight << ")";
+
+	} // setupRenderScale
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -104,6 +131,8 @@ namespace Renderer
 		LOG(LogInfo) << "Created window successfully.";
 
 		createContext();
+		setupRenderScale();
+		createFbo();
 		setIcon();
 		setSwapInterval();
 
@@ -191,6 +220,7 @@ namespace Renderer
 
 		setViewport(viewport);
 		setProjection(projection);
+		bindFboForScene();
 		swapBuffers();
 
 		return true;
@@ -290,5 +320,7 @@ namespace Renderer
 	int         getScreenOffsetX() { return screenOffsetX; }
 	int         getScreenOffsetY() { return screenOffsetY; }
 	int         getScreenRotate()  { return screenRotate; }
+	int         getRenderWidth()   { return renderWidth  ? renderWidth  : screenWidth;  }
+	int         getRenderHeight()  { return renderHeight ? renderHeight : screenHeight; }
 
 } // Renderer::

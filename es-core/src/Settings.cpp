@@ -79,7 +79,7 @@ void Settings::setDefaults()
 	mBoolMap["QuickSystemSelect"] = true;
 	mBoolMap["MoveCarousel"] = true;
 
-	mBoolMap["ThreadedLoading"] = false;
+	mBoolMap["ThreadedLoading"] = true;
 
 	mBoolMap["Debug"] = false;
 	mBoolMap["DebugGrid"] = false;
@@ -92,9 +92,17 @@ void Settings::setDefaults()
 	mIntMap["ScraperResizeWidth"] = 400;
 	mIntMap["ScraperResizeHeight"] = 0;
 	#ifdef _RPI_
-		mIntMap["MaxVRAM"] = 80;
+		mIntMap["MaxVRAM"] = 256;  // 80 was too small for 4K artwork
 	#else
 		mIntMap["MaxVRAM"] = 100;
+	#endif
+
+	#ifdef _RPI_
+		mIntMap["FrameRateCap"] = 30;   // 30 FPS cap by default on RPi to ease GPU load at 4K
+		mIntMap["RenderScale"]  = 50;   // 50% = 1920x1080 render resolution on a 4K display
+	#else
+		mIntMap["FrameRateCap"] = 0;    // 0 = no cap (unlimited)
+		mIntMap["RenderScale"]  = 100;  // 100 = disabled (full native resolution, no FBO)
 	#endif
 
 	mStringMap["TransitionStyle"] = "fade";

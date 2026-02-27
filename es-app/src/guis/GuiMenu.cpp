@@ -412,6 +412,20 @@ void GuiMenu::openOtherSettings()
 	s->addWithLabel("VRAM LIMIT", max_vram);
 	s->addSaveFunc([max_vram] { Settings::getInstance()->setInt("MaxVRAM", (int)Math::round(max_vram->getValue())); });
 
+	// frame rate cap
+	auto frame_cap = std::make_shared<SliderComponent>(mWindow, 0.f, 60.f, 5.f, "fps");
+	frame_cap->setValue((float)Settings::getInstance()->getInt("FrameRateCap"));
+	s->addWithLabel("FRAME RATE CAP (0=UNLIMITED)", frame_cap);
+	s->addSaveFunc([frame_cap] { Settings::getInstance()->setInt("FrameRateCap", (int)Math::round(frame_cap->getValue())); });
+
+#ifdef _RPI_
+	// render resolution scale for 4K performance (requires restart)
+	auto render_scale = std::make_shared<SliderComponent>(mWindow, 25.f, 100.f, 25.f, "%");
+	render_scale->setValue((float)Settings::getInstance()->getInt("RenderScale"));
+	s->addWithLabel("RENDER SCALE (RESTART REQUIRED)", render_scale);
+	s->addSaveFunc([render_scale] { Settings::getInstance()->setInt("RenderScale", (int)Math::round(render_scale->getValue())); });
+#endif
+
 	// power saver
 	auto power_saver = std::make_shared< OptionListComponent<std::string> >(mWindow, "POWER SAVER MODES", false);
 	std::vector<std::string> modes;
