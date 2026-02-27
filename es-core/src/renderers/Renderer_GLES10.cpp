@@ -148,6 +148,11 @@ namespace Renderer
 
 //////////////////////////////////////////////////////////////////////////
 
+	void createFbo()      { } // FBO render scaling is GLES2 only
+	void bindFboForScene(){ } // FBO render scaling is GLES2 only
+
+//////////////////////////////////////////////////////////////////////////
+
 	unsigned int createTexture(const Texture::Type _type, const bool _linear, const bool _repeat, const unsigned int _width, const unsigned int _height, const void* _data)
 	{
 		const GLenum type = convertTextureType(_type);
