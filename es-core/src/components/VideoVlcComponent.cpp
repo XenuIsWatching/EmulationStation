@@ -17,6 +17,44 @@ typedef SSIZE_T ssize_t;
 
 libvlc_instance_t* VideoVlcComponent::mVLC = NULL;
 
+// Persistent worker thread statics for non-blocking VLC cleanup
+std::thread              VideoVlcComponent::sCleanupThread;
+std::mutex               VideoVlcComponent::sCleanupMutex;
+std::condition_variable  VideoVlcComponent::sCleanupCond;
+std::deque<std::function<void()>> VideoVlcComponent::sCleanupQueue;
+bool                     VideoVlcComponent::sCleanupRunning = false;
+
+void VideoVlcComponent::cleanupWorker()
+{
+	while (true)
+	{
+		std::function<void()> task;
+		{
+			std::unique_lock<std::mutex> lock(sCleanupMutex);
+			sCleanupCond.wait(lock, [] { return !sCleanupQueue.empty(); });
+			task = std::move(sCleanupQueue.front());
+			sCleanupQueue.pop_front();
+		}
+		task();
+	}
+}
+
+void VideoVlcComponent::postCleanupTask(std::function<void()> task)
+{
+	{
+		std::lock_guard<std::mutex> lock(sCleanupMutex);
+		// Lazily start the persistent worker thread on first use
+		if (!sCleanupRunning)
+		{
+			sCleanupRunning = true;
+			sCleanupThread = std::thread(cleanupWorker);
+			sCleanupThread.detach();
+		}
+		sCleanupQueue.push_back(std::move(task));
+	}
+	sCleanupCond.notify_one();
+}
+
 // VLC prepares to render a video frame.
 static void *lock(void *data, void **p_pixels) {
 	struct VideoContext *c = (struct VideoContext *)data;
@@ -43,7 +81,7 @@ VideoVlcComponent::VideoVlcComponent(Window* window, std::string subtitles) :
 	mMediaPlayer(nullptr),
 	mMediaParsing(false)
 {
-	memset(&mContext, 0, sizeof(mContext));
+	mContext = nullptr;
 
 	// Get an empty texture for rendering the video
 	mTexture = TextureResource::get("");
@@ -146,7 +184,7 @@ void VideoVlcComponent::render(const Transform4x4f& parentTrans)
 	GuiComponent::renderChildren(trans);
 	Renderer::setMatrix(trans);
 
-	if (mIsPlaying && mContext.valid)
+	if (mIsPlaying && mContext && mContext->valid)
 	{
 		const unsigned int fadeIn = (unsigned int)(Math::clamp(0.0f, mFadeIn, 1.0f) * 255.0f);
 		const unsigned int color  = Renderer::convertColor((fadeIn << 24) | (fadeIn << 16) | (fadeIn << 8) | 255);
@@ -162,7 +200,7 @@ void VideoVlcComponent::render(const Transform4x4f& parentTrans)
 			vertices[i].pos.round();
 
 		// Build a texture for the video frame
-		mTexture->initFromPixels((unsigned char*)mContext.surface->pixels, mContext.surface->w, mContext.surface->h);
+		mTexture->initFromPixels((unsigned char*)mContext->surface->pixels, mContext->surface->w, mContext->surface->h);
 		mTexture->bind();
 
 		// Render it
@@ -176,23 +214,25 @@ void VideoVlcComponent::render(const Transform4x4f& parentTrans)
 
 void VideoVlcComponent::setupContext()
 {
-	if (!mContext.valid)
+	if (!mContext)
 	{
 		// Create an RGBA surface to render the video into
-		mContext.surface = SDL_CreateRGBSurface(SDL_SWSURFACE, (int)mVideoWidth, (int)mVideoHeight, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
-		mContext.mutex = SDL_CreateMutex();
-		mContext.valid = true;
+		mContext = new VideoContext();
+		mContext->surface = SDL_CreateRGBSurface(SDL_SWSURFACE, (int)mVideoWidth, (int)mVideoHeight, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
+		mContext->mutex = SDL_CreateMutex();
+		mContext->valid = true;
 		resize();
 	}
 }
 
 void VideoVlcComponent::freeContext()
 {
-	if (mContext.valid)
+	if (mContext)
 	{
-		SDL_FreeSurface(mContext.surface);
-		SDL_DestroyMutex(mContext.mutex);
-		mContext.valid = false;
+		SDL_FreeSurface(mContext->surface);
+		SDL_DestroyMutex(mContext->mutex);
+		delete mContext;
+		mContext = nullptr;
 	}
 }
 
@@ -336,7 +376,7 @@ void VideoVlcComponent::onMediaParsed()
 		setMuteMode();
 
 		libvlc_media_player_play(mMediaPlayer);
-		libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, (void*)&mContext);
+		libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, (void*)mContext);
 		libvlc_video_set_format(mMediaPlayer, "RGBA", (int)mVideoWidth, (int)mVideoHeight, (int)mVideoWidth * 4);
 
 		// Update the playing state
@@ -350,23 +390,44 @@ void VideoVlcComponent::stopVideo()
 	mIsPlaying = false;
 	mStartDelayed = false;
 	mPlayingVideoPath = "";
-	// If we were mid-parse with no player yet, cancel the parse and release the media
+	// If we were mid-parse with no player yet, cancel the parse on a background
+	// thread so the blocking libvlc_media_parse_stop call doesn't stall the UI.
 	if (mMediaParsing && mMedia)
 	{
-		libvlc_media_parse_stop(mMedia);
-		libvlc_media_release(mMedia);
+		libvlc_media_t* media = mMedia;
 		mMedia = nullptr;
+		mMediaParsing = false;
+
+		postCleanupTask([media]() {
+			libvlc_media_parse_stop(media);
+			libvlc_media_release(media);
+		});
+		return;
 	}
 	mMediaParsing = false;
-	// Release the media player so it stops calling back to us
+	// Release the media player on a background thread so the blocking
+	// libvlc_media_player_stop call doesn't freeze the UI.
 	if (mMediaPlayer)
 	{
-		libvlc_media_player_stop(mMediaPlayer);
-		libvlc_media_player_release(mMediaPlayer);
-		libvlc_media_release(mMedia);
-		mMediaPlayer = NULL;
-		freeContext();
-		PowerSaver::resume();
+		libvlc_media_player_t* player = mMediaPlayer;
+		libvlc_media_t* media = mMedia;
+		VideoContext* context = mContext;
+
+		mMediaPlayer = nullptr;
+		mMedia = nullptr;
+		mContext = nullptr;
+
+		postCleanupTask([player, media, context]() {
+			libvlc_media_player_stop(player);
+			libvlc_media_player_release(player);
+			libvlc_media_release(media);
+			if (context) {
+				SDL_FreeSurface(context->surface);
+				SDL_DestroyMutex(context->mutex);
+				delete context;
+			}
+			PowerSaver::resume();
+		});
 	}
 }
 
