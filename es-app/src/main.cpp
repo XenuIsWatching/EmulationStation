@@ -8,6 +8,7 @@
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
 #include "EmulationStation.h"
+#include "Gamelist.h"
 #include "InputManager.h"
 #include "Log.h"
 #include "MameNames.h"
@@ -484,6 +485,7 @@ int main(int argc, char* argv[])
 
 	MameNames::deinit();
 	CollectionSystemManager::deinit();
+	waitForGamelistWrites();
 	SystemData::deleteSystems();
 
 	// call this ONLY when linking with FreeImage as a static library

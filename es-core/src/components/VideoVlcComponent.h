@@ -62,12 +62,19 @@ private:
 	void setupContext();
 	void freeContext();
 
+	// Called each frame to check if async media parsing has completed;
+	// once done, extracts track info and starts playback.
+	void handleParsing();
+	// Second half of startVideo — runs after parsing finishes.
+	void onMediaParsed();
+
 private:
 	static libvlc_instance_t*		mVLC;
 	libvlc_media_t*					mMedia;
 	libvlc_media_player_t*			mMediaPlayer;
 	VideoContext					mContext;
 	std::shared_ptr<TextureResource> mTexture;
+	bool							mMediaParsing;
 };
 
 #endif // ES_CORE_COMPONENTS_VIDEO_VLC_COMPONENT_H

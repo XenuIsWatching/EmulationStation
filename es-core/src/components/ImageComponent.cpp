@@ -21,7 +21,8 @@ Vector2f ImageComponent::getSize() const
 ImageComponent::ImageComponent(Window* window, bool forceLoad, bool dynamic) : GuiComponent(window),
 	mTargetIsMax(false), mTargetIsMin(false), mFlipX(false), mFlipY(false), mTargetSize(0, 0), mColorShift(0xFFFFFFFF),
 	mColorShiftEnd(0xFFFFFFFF), mColorGradientHorizontal(true), mForceLoad(forceLoad), mDynamic(dynamic),
-	mFadeOpacity(0), mFading(false), mRotateByTargetSize(false), mTopLeftCrop(0.0f, 0.0f), mBottomRightCrop(1.0f, 1.0f)
+	mFadeOpacity(0), mFading(false), mRotateByTargetSize(false), mTopLeftCrop(0.0f, 0.0f), mBottomRightCrop(1.0f, 1.0f),
+	mAsyncPending(false)
 {
 	updateColors();
 }
@@ -132,6 +133,8 @@ void ImageComponent::setDefaultImage(std::string path)
 
 void ImageComponent::setImage(std::string path, bool tile)
 {
+	mAsyncPending = false;
+
 	if(path.empty() || !ResourceManager::getInstance()->fileExists(path))
 	{
 		if(mDefaultPath.empty() || !ResourceManager::getInstance()->fileExists(mDefaultPath))
@@ -158,7 +161,67 @@ void ImageComponent::setImage(const char* path, size_t length, bool tile)
 void ImageComponent::setImage(const std::shared_ptr<TextureResource>& texture)
 {
 	mTexture = texture;
+	mAsyncPending = false;
 	resize();
+}
+
+void ImageComponent::setImageAsync(std::string path, bool tile)
+{
+	if (!Settings::getInstance()->getBool("AsyncFileIO"))
+	{
+		setImage(path, tile);
+		return;
+	}
+
+	mAsyncPending = false;
+
+	// Skip the fileExists() check used by setImage() — it calls stat64 which blocks
+	// on NAS. Instead, just hand the path to TextureResource and let the background
+	// thread's load() handle missing files gracefully.
+	if(path.empty())
+	{
+		if(mDefaultPath.empty())
+			mTexture.reset();
+		else
+			mTexture = TextureResource::get(mDefaultPath, tile, mForceLoad, mDynamic, false);
+	} else {
+		mTexture = TextureResource::get(path, tile, mForceLoad, mDynamic, false);
+	}
+
+	if(mTexture)
+	{
+		// Check if the texture is already loaded (e.g. cache hit)
+		if(mTexture->updateTextureSize())
+		{
+			LOG(LogDebug) << "setImageAsync: immediate load for " << path;
+			resize();
+		}
+		else
+		{
+			// Texture is loading in background - resize() will be called from update() when ready
+			LOG(LogDebug) << "setImageAsync: queued async for " << path;
+			mAsyncPending = true;
+		}
+	}
+	else
+	{
+		LOG(LogDebug) << "setImageAsync: no texture for " << path;
+	}
+}
+
+void ImageComponent::update(int deltaTime)
+{
+	GuiComponent::update(deltaTime);
+
+	if(mAsyncPending && mTexture)
+	{
+		if(mTexture->updateTextureSize())
+		{
+			LOG(LogDebug) << "ImageComponent::update: async load complete, calling resize. size=" << mTexture->getSize().x() << "x" << mTexture->getSize().y();
+			mAsyncPending = false;
+			resize();
+		}
+	}
 }
 
 void ImageComponent::setResize(float width, float height)
@@ -325,7 +388,7 @@ void ImageComponent::render(const Transform4x4f& parentTrans)
 	Transform4x4f trans = parentTrans * getTransform();
 	Renderer::setMatrix(trans);
 
-	if(mTexture && mOpacity > 0)
+	if(mTexture && mOpacity > 0 && !mAsyncPending)
 	{
 		if(Settings::getInstance()->getBool("DebugImage")) {
 			Vector2f targetSizePos = (mTargetSize - mSize) * mOrigin * -1;
@@ -345,6 +408,13 @@ void ImageComponent::render(const Transform4x4f& parentTrans)
 			LOG(LogError) << "Image texture is not initialized!";
 			mTexture.reset();
 		}
+	}
+	else if(mTexture && mAsyncPending)
+	{
+		// Debug: log when we're skipping render due to async pending
+		static int skipCount = 0;
+		if(++skipCount % 60 == 1) // log every ~1 second at 60fps
+			LOG(LogDebug) << "render: skipping due to mAsyncPending, mSize=" << mSize.x() << "x" << mSize.y() << " opacity=" << (int)mOpacity;
 	}
 
 	GuiComponent::renderChildren(trans);

@@ -16,13 +16,17 @@ class TextureData;
 class TextureResource : public IReloadable
 {
 public:
-	static std::shared_ptr<TextureResource> get(const std::string& path, bool tile = false, bool forceLoad = false, bool dynamic = true);
+	static std::shared_ptr<TextureResource> get(const std::string& path, bool tile = false, bool forceLoad = false, bool dynamic = true, bool block = true);
 	void initFromPixels(const unsigned char* dataRGBA, size_t width, size_t height);
 	virtual void initFromMemory(const char* file, size_t length);
 
 	// For scalable source images in textures we want to set the resolution to rasterize at
 	void rasterizeAt(size_t width, size_t height);
 	Vector2f getSourceImageSize() const;
+
+	// Check if asynchronously-loaded texture data is ready and update cached sizes.
+	// Returns true if sizes are available (texture loaded), false if still pending.
+	bool updateTextureSize();
 
 	virtual ~TextureResource();
 
@@ -36,7 +40,7 @@ public:
 	static size_t getTotalTextureSize(); // returns the number of bytes that would be used if all textures were in memory
 
 protected:
-	TextureResource(const std::string& path, bool tile, bool dynamic);
+	TextureResource(const std::string& path, bool tile, bool dynamic, bool block = true);
 	virtual bool unload();
 	virtual void reload();
 
