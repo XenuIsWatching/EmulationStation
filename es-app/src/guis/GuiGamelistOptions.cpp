@@ -1,6 +1,7 @@
 #include "GuiGamelistOptions.h"
 
 #include "guis/GuiGamelistFilter.h"
+#include "guis/GuiRomSelector.h"
 #include "scrapers/Scraper.h"
 #include "views/gamelist/IGameListView.h"
 #include "views/UIModeController.h"
@@ -152,6 +153,17 @@ GuiGamelistOptions::GuiGamelistOptions(Window* window, SystemData* system) : Gui
 		mMenu.addRow(row);
 	}
 
+	// "EDIT ROM METADATA" — only for GAME entries that have ROM variants
+	if(UIModeController::getInstance()->isUIModeFull() && !mFromPlaceholder &&
+	   file->getType() == GAME && !file->getSourceFileData()->getRoms().empty())
+	{
+		row.elements.clear();
+		row.addElement(std::make_shared<TextComponent>(mWindow, "EDIT ROM METADATA", Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+		row.addElement(makeArrow(mWindow), false);
+		row.makeAcceptInputHandler(std::bind(&GuiGamelistOptions::openRomMetaDataEd, this));
+		mMenu.addRow(row);
+	}
+
 	// center the menu
 	setSize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
 	mMenu.setPosition((mSize.x() - mMenu.getSize().x()) / 2, (mSize.y() - mMenu.getSize().y()) / 2);
@@ -272,6 +284,16 @@ void GuiGamelistOptions::openMetaDataEd()
 	}
 
 	mWindow->pushGui(new GuiMetaDataEd(mWindow, &file->metadata, file->metadata.getMDD(), p, Utils::FileSystem::getFileName(file->getPath()), saveBtnFunc, deleteBtnFunc));
+}
+
+void GuiGamelistOptions::openRomMetaDataEd()
+{
+	FileData* file = getGamelist()->getCursor()->getSourceFileData();
+	mWindow->pushGui(new GuiRomSelector(mWindow, file, [this, file] {
+		ViewController::get()->getGameListView(mSystem)->setCursor(file, true);
+		mMetadataChanged = true;
+		ViewController::get()->getGameListView(file->getSystem())->onFileChanged(file, FILE_METADATA_CHANGED);
+	}));
 }
 
 void GuiGamelistOptions::jumpToLetter()

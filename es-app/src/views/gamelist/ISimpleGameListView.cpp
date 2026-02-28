@@ -72,7 +72,7 @@ namespace
 
 				auto star = std::make_shared<ImageComponent>(mWindow);
 				const float starSize = Font::get(FONT_SIZE_MEDIUM)->getLetterHeight();
-				star->setImage(":/star_filled.svg");
+				star->setImage(":/cartridge.svg");
 				star->setResize(starSize, starSize);
 				star->setVisible(roms[i].preferred);
 

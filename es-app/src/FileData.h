@@ -19,7 +19,6 @@ struct RomData
 	std::vector<std::string> languages;
 
 	std::string releaseDate;
-	std::string revision;
 
 	std::string image;
 	std::string video;
