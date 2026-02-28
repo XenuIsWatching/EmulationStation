@@ -154,9 +154,9 @@ GuiGamelistOptions::GuiGamelistOptions(Window* window, SystemData* system) : Gui
 		mMenu.addRow(row);
 	}
 
-	// "SELECT PREFERRED ROM" — only for GAME entries that have ROM variants
+	// "SELECT PREFERRED ROM" — only for GAME entries that have more than one ROM variant
 	if(UIModeController::getInstance()->isUIModeFull() && !mFromPlaceholder &&
-	   file->getType() == GAME && !file->getSourceFileData()->getRoms().empty())
+	   file->getType() == GAME && file->getSourceFileData()->getRoms().size() > 1)
 	{
 		row.elements.clear();
 		row.addElement(std::make_shared<TextComponent>(mWindow, "SELECT PREFERRED ROM", Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
