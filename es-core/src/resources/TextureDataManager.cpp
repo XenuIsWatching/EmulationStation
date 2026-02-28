@@ -64,8 +64,10 @@ std::shared_ptr<TextureData> TextureDataManager::get(const TextureResource* key,
 		// Store it back in the lookup
 		mTextureLookup[key] = mTextures.cbegin();
 
-		// Make sure it's loaded or queued for loading
-		if (enableLoading && !tex->isLoaded())
+		// Make sure it's loaded or queued for loading.
+		// Skip textures whose load previously failed (e.g. file not found) so
+		// we don't keep re-queuing them every frame they are rendered.
+		if (enableLoading && !tex->isLoadedOrFailed())
 			load(tex);
 	}
 	return tex;
@@ -110,8 +112,8 @@ size_t TextureDataManager::getQueueSize()
 
 void TextureDataManager::load(std::shared_ptr<TextureData> tex, bool block)
 {
-	// See if it's already loaded
-	if (tex->isLoaded())
+	// See if it's already loaded or has permanently failed
+	if (tex->isLoadedOrFailed())
 		return;
 	// Not loaded. Make sure there is room
 	size_t max_texture = (size_t)Settings::getInstance()->getInt("MaxVRAM") * 1024 * 1024;
@@ -146,12 +148,15 @@ TextureLoader::TextureLoader() : mExit(false)
 
 TextureLoader::~TextureLoader()
 {
-	// Just abort any waiting texture
-	mTextureDataQ.clear();
-	mTextureDataLookup.clear();
-
-	// Exit the thread
-	mExit = true;
+	// Clear the queue and signal exit atomically under the mutex so there is no
+	// race with the background thread's condition_variable wait (which holds the
+	// mutex while sleeping).
+	{
+		std::unique_lock<std::mutex> lock(mMutex);
+		mTextureDataQ.clear();
+		mTextureDataLookup.clear();
+		mExit = true;
+	}
 	mEvent.notify_one();
 	mThread->join();
 	delete mThread;
@@ -193,8 +198,8 @@ void TextureLoader::threadProc()
 
 void TextureLoader::load(std::shared_ptr<TextureData> textureData)
 {
-	// Make sure it's not already loaded
-	if (!textureData->isLoaded())
+	// Make sure it's not already loaded and hasn't permanently failed
+	if (!textureData->isLoadedOrFailed())
 	{
 		std::unique_lock<std::mutex> lock(mMutex);
 		// Remove it from the queue if it is already there

@@ -197,6 +197,12 @@ bool TextureResource::updateTextureSize()
 		return true;
 	}
 
+	// Load permanently failed (e.g. file not found). Treat as "done" so callers
+	// (e.g. ImageComponent) don't keep polling every frame waiting for a result
+	// that will never come. mSize stays (0,0) — the image simply won't display.
+	if (data && data->hasLoadFailed())
+		return true;
+
 	return false;
 }
 
@@ -259,7 +265,7 @@ void TextureResource::reload()
 {
 	// For dynamically loaded textures the texture manager will load them on demand.
 	// For manually loaded textures we have to reload them here
-	if (mTextureData && !mTextureData->isLoaded())
+	if (mTextureData && !mTextureData->isLoadedOrFailed())
 		mTextureData->load();
 
 	// Uncomment this 2 lines in future release in order to reload texture VRAM exactly as it was before
