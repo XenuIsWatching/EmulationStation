@@ -25,6 +25,13 @@ public:
 	bool load();
 
 	bool isLoaded();
+	// Returns true if a previous load() attempt failed (e.g. file not found).
+	// The texture will not be re-queued for loading while this is set.
+	bool hasLoadFailed();
+	// Returns true if loading is complete — either successfully loaded or
+	// permanently failed. Single mutex acquisition; use in preference to
+	// !isLoaded() && !hasLoadFailed() or isLoaded() || hasLoadFailed().
+	bool isLoadedOrFailed();
 
 	// Upload the texture to VRAM if necessary and bind. Returns true if bound ok or
 	// false if either not loaded
@@ -59,6 +66,7 @@ private:
 	float			mSourceHeight;
 	bool			mScalable;
 	bool			mReloadable;
+	bool			mLoadFailed;
 };
 
 #endif // ES_CORE_RESOURCES_TEXTURE_DATA_H

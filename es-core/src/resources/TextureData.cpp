@@ -13,7 +13,7 @@
 #define DPI 96
 
 TextureData::TextureData(bool tile) : mTile(tile), mTextureID(0), mDataRGBA(nullptr), mScalable(false),
-									  mWidth(0), mHeight(0), mSourceWidth(0.0f), mSourceHeight(0.0f)
+									  mWidth(0), mHeight(0), mSourceWidth(0.0f), mSourceHeight(0.0f), mLoadFailed(false)
 {
 }
 
@@ -136,6 +136,11 @@ bool TextureData::load()
 		else
 			retval = initImageFromMemory((const unsigned char*)data.ptr.get(), data.length);
 	}
+	if (!retval)
+	{
+		std::unique_lock<std::mutex> lock(mMutex);
+		mLoadFailed = true;
+	}
 	return retval;
 }
 
@@ -145,6 +150,18 @@ bool TextureData::isLoaded()
 	if (mDataRGBA || (mTextureID != 0))
 		return true;
 	return false;
+}
+
+bool TextureData::hasLoadFailed()
+{
+	std::unique_lock<std::mutex> lock(mMutex);
+	return mLoadFailed;
+}
+
+bool TextureData::isLoadedOrFailed()
+{
+	std::unique_lock<std::mutex> lock(mMutex);
+	return mDataRGBA || (mTextureID != 0) || mLoadFailed;
 }
 
 bool TextureData::uploadAndBind()
