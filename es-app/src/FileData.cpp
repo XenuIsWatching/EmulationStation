@@ -391,8 +391,9 @@ void FileData::launchGame(Window* window, const std::string& romPathOverride)
 	Scripting::fireEvent("game-end");
 
 	window->init();
-	InputManager::getInstance()->init();
 	VolumeControl::getInstance()->init();
+	AudioManager::getInstance();
+	InputManager::getInstance()->init();
 	window->normalizeNextUpdate();
 
 	//update number of times the game has been launched
