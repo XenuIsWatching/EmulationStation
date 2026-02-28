@@ -78,7 +78,6 @@ namespace
 		rom.regions = parseRomMultiValue(romNode, "region", "regions");
 		rom.languages = parseRomMultiValue(romNode, "language", "languages");
 		rom.releaseDate = romNode.child("releasedate").text().get();
-		rom.revision = romNode.child("revision").text().get();
 		rom.image = Utils::FileSystem::resolveRelativePath(romNode.child("image").text().get(), relativeTo, true, true);
 		rom.video = Utils::FileSystem::resolveRelativePath(romNode.child("video").text().get(), relativeTo, true, true);
 		rom.thumbnail = Utils::FileSystem::resolveRelativePath(romNode.child("thumbnail").text().get(), relativeTo, true, true);
@@ -359,7 +358,6 @@ void parseGamelist(SystemData* system)
 						rom.regions = parseRomMultiValue(fileNode, "region", "regions");
 						rom.languages = parseRomMultiValue(fileNode, "language", "languages");
 						rom.releaseDate = fileNode.child("releasedate").text().get();
-						rom.revision = fileNode.child("revision").text().get();
 						rom.image = Utils::FileSystem::resolveRelativePath(fileNode.child("image").text().get(), relativeTo, true, true);
 						rom.video = Utils::FileSystem::resolveRelativePath(fileNode.child("video").text().get(), relativeTo, true, true);
 						rom.thumbnail = Utils::FileSystem::resolveRelativePath(fileNode.child("thumbnail").text().get(), relativeTo, true, true);
@@ -450,7 +448,6 @@ void addFileDataNode(pugi::xml_node& parent, const FileData* file, const char* t
 			appendMultiValueNode(romNode, "regions", "region", it->regions);
 			appendMultiValueNode(romNode, "languages", "language", it->languages);
 			appendOptionalTextNode(romNode, "releasedate", it->releaseDate);
-			appendOptionalTextNode(romNode, "revision", it->revision);
 			appendOptionalPathNode(romNode, "image", it->image, system->getStartPath());
 			appendOptionalPathNode(romNode, "video", it->video, system->getStartPath());
 			appendOptionalPathNode(romNode, "thumbnail", it->thumbnail, system->getStartPath());
