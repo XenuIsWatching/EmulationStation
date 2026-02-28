@@ -115,14 +115,9 @@ bool VideoComponent::setVideo(std::string path)
 	// Store the path
 	mVideoPath = fullPath;
 
-	// If the file exists then set the new video
-	if (!fullPath.empty() && ResourceManager::getInstance()->fileExists(fullPath))
-	{
-		// Return true to show that we are going to attempt to play a video
-		return true;
-	}
-	// Return false to show that no video will be displayed
-	return false;
+	// Return true if there's a path to attempt; missing files are handled
+	// gracefully by VLC, avoiding a blocking stat() call on NAS paths.
+	return !fullPath.empty();
 }
 
 void VideoComponent::setImage(std::string path)
