@@ -25,6 +25,7 @@ private:
 	bool launchSystemScreenSaver();
 	void openMetaDataEd();
 	void openRomMetaDataEd();
+	void openPreferredRomSelector();
 	void startEditMode();
 	void recreateCollection();
 	void exitEditMode();

@@ -1,6 +1,5 @@
 #include "views/gamelist/ISimpleGameListView.h"
 
-#include "guis/GuiSettings.h"
 #include "components/ImageComponent.h"
 #include "components/TextComponent.h"
 #include "views/UIModeController.h"
@@ -11,187 +10,6 @@
 #include "Sound.h"
 #include "SystemData.h"
 #include "Window.h"
-
-namespace
-{
-	class RomPromptTextComponent : public TextComponent
-	{
-	public:
-		RomPromptTextComponent(Window* window, const std::string& text, const std::shared_ptr<Font>& font, unsigned int color)
-			: TextComponent(window, text, font, color)
-		{
-		}
-
-		std::vector<HelpPrompt> getHelpPrompts() override
-		{
-			std::vector<HelpPrompt> prompts;
-			prompts.push_back(HelpPrompt("a", "launch"));
-			prompts.push_back(HelpPrompt("y", "preferred"));
-			return prompts;
-		}
-	};
-
-	class RomSelectionMenu : public GuiSettings
-	{
-	public:
-		RomSelectionMenu(Window* window, FileData* game)
-			: GuiSettings(window, "ROMS"), mGame(game), mPreferredChanged(false)
-		{
-			buildRows();
-		}
-
-		~RomSelectionMenu()
-		{
-			if(!mPreferredChanged || mGame == nullptr)
-				return;
-
-			// Preferred ROM changes alter effective media/launch selection, so notify both
-			// the visible entry and canonical source entry to refresh info panels immediately.
-			ViewController::get()->onFileChanged(mGame, FILE_METADATA_CHANGED);
-			FileData* source = mGame->getSourceFileData();
-			if(source != mGame)
-				ViewController::get()->onFileChanged(source, FILE_METADATA_CHANGED);
-		}
-
-	private:
-		struct RomRowWidgets
-		{
-			std::shared_ptr<ImageComponent> star;
-			std::shared_ptr<TextComponent> name;
-		};
-
-		void buildRows()
-		{
-			if(mGame == nullptr)
-				return;
-
-			const std::vector<RomData>& roms = mGame->getRoms();
-			for(unsigned int i = 0; i < roms.size(); ++i)
-			{
-				ComponentListRow row;
-
-				auto star = std::make_shared<ImageComponent>(mWindow);
-				const float starSize = Font::get(FONT_SIZE_MEDIUM)->getLetterHeight();
-				star->setImage(":/cartridge.svg");
-				star->setResize(starSize, starSize);
-				star->setVisible(roms[i].preferred);
-
-				std::string romName = roms[i].romName.empty() ? mGame->getName() : roms[i].romName;
-				auto label = std::make_shared<RomPromptTextComponent>(mWindow, romName, Font::get(FONT_SIZE_MEDIUM), 0x777777FF);
-
-				row.addElement(star, false, false);
-				row.addElement(label, true);
-				row.input_handler = [this, i](InputConfig* config, Input input) -> bool {
-					if(input.value == 0)
-						return false;
-
-					if(config->isMappedTo("a", input))
-					{
-						launchRom(i);
-						return true;
-					}
-
-					if(config->isMappedTo("y", input))
-					{
-						setPreferredRom(i);
-						return true;
-					}
-
-					return false;
-				};
-
-				addRow(row);
-
-				RomRowWidgets widgets;
-				widgets.star = star;
-				widgets.name = label;
-				mRows.push_back(widgets);
-			}
-
-			updatePreferredIndicator();
-		}
-
-		void setPreferredRom(unsigned int index)
-		{
-			if(mGame == nullptr)
-				return;
-
-			FileData* source = mGame->getSourceFileData();
-			std::vector<RomData>& roms = source->getRomsMutable();
-			if(index >= roms.size())
-				return;
-
-			for(unsigned int i = 0; i < roms.size(); ++i)
-				roms[i].preferred = (i == index);
-
-			// Mark metadata dirty so onMetaDataSavePoint() persists updated ROM preference.
-			source->metadata.set("name", source->metadata.get("name"));
-			source->getSystem()->onMetaDataSavePoint();
-
-			if(mGame != source)
-				mGame->refreshMetadata();
-
-			mPreferredChanged = true;
-			updatePreferredIndicator();
-		}
-
-		void launchRom(unsigned int index)
-		{
-			if(mGame == nullptr)
-				return;
-
-			FileData* selectedEntry = mGame;
-			FileData* source = selectedEntry->getSourceFileData();
-			const std::vector<RomData>& roms = source->getRoms();
-			if(index >= roms.size() || roms[index].path.empty())
-				return;
-
-			const std::string launchPath = roms[index].path;
-			std::shared_ptr<IGameListView> currentGameList = ViewController::get()->getGameListView(selectedEntry->getSystem());
-			if(currentGameList)
-				currentGameList->onHide();
-
-			// Keep this popup alive so returning from gameplay lands back on the
-			// same ROM selection screen and highlighted row.
-			source->launchGame(mWindow, launchPath);
-			ViewController::get()->onFileChanged(source, FILE_METADATA_CHANGED);
-			if(selectedEntry != source)
-				ViewController::get()->onFileChanged(selectedEntry, FILE_METADATA_CHANGED);
-
-			if(currentGameList)
-			{
-				currentGameList->setCursor(selectedEntry, true);
-				currentGameList->onShow();
-			}
-		}
-
-		void updatePreferredIndicator()
-		{
-			if(mGame == nullptr)
-				return;
-
-			const std::vector<RomData>& roms = mGame->getRoms();
-			for(unsigned int i = 0; i < roms.size() && i < mRows.size(); ++i)
-				mRows[i].star->setVisible(roms[i].preferred);
-		}
-
-		FileData* mGame;
-		bool mPreferredChanged;
-		std::vector<RomRowWidgets> mRows;
-	};
-
-	void openRomSelectionMenu(Window* window, FileData* game)
-	{
-		if(game == nullptr || game->getType() != GAME)
-			return;
-
-		const std::vector<RomData>& roms = game->getRoms();
-		if(roms.empty())
-			return;
-
-		window->pushGui(new RomSelectionMenu(window, game));
-	}
-}
 
 ISimpleGameListView::ISimpleGameListView(Window* window, FileData* root) : IGameListView(window, root),
 	mHeaderText(window), mHeaderImage(window), mBackground(window)
@@ -334,12 +152,13 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 		{
 			if (mRoot->getSystem()->isGameSystem())
 			{
-				FileData* cursor = getCursor();
-				if(cursor->getType() == GAME)
+				// go to random system game
+				FileData* randomGame = getCursor()->getSystem()->getRandomGame();
+				if (randomGame)
 				{
-					openRomSelectionMenu(mWindow, cursor);
-					return true;
+					setCursor(randomGame);
 				}
+				return true;
 			}
 		}else if (config->isMappedTo("y", input) && !UIModeController::getInstance()->isUIModeKid())
 		{

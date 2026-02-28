@@ -1,6 +1,7 @@
 #include "GuiGamelistOptions.h"
 
 #include "guis/GuiGamelistFilter.h"
+#include "guis/GuiRomSelectionMenu.h"
 #include "guis/GuiRomSelector.h"
 #include "scrapers/Scraper.h"
 #include "views/gamelist/IGameListView.h"
@@ -153,6 +154,17 @@ GuiGamelistOptions::GuiGamelistOptions(Window* window, SystemData* system) : Gui
 		mMenu.addRow(row);
 	}
 
+	// "SELECT PREFERRED ROM" — only for GAME entries that have ROM variants
+	if(UIModeController::getInstance()->isUIModeFull() && !mFromPlaceholder &&
+	   file->getType() == GAME && !file->getSourceFileData()->getRoms().empty())
+	{
+		row.elements.clear();
+		row.addElement(std::make_shared<TextComponent>(mWindow, "SELECT PREFERRED ROM", Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+		row.addElement(makeArrow(mWindow), false);
+		row.makeAcceptInputHandler(std::bind(&GuiGamelistOptions::openPreferredRomSelector, this));
+		mMenu.addRow(row);
+	}
+
 	// "EDIT ROM METADATA" — only for GAME entries that have ROM variants
 	if(UIModeController::getInstance()->isUIModeFull() && !mFromPlaceholder &&
 	   file->getType() == GAME && !file->getSourceFileData()->getRoms().empty())
@@ -284,6 +296,12 @@ void GuiGamelistOptions::openMetaDataEd()
 	}
 
 	mWindow->pushGui(new GuiMetaDataEd(mWindow, &file->metadata, file->metadata.getMDD(), p, Utils::FileSystem::getFileName(file->getPath()), saveBtnFunc, deleteBtnFunc));
+}
+
+void GuiGamelistOptions::openPreferredRomSelector()
+{
+	FileData* file = getGamelist()->getCursor()->getSourceFileData();
+	mWindow->pushGui(new GuiRomSelectionMenu(mWindow, file));
 }
 
 void GuiGamelistOptions::openRomMetaDataEd()
