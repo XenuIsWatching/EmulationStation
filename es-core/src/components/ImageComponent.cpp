@@ -176,6 +176,7 @@ void ImageComponent::setImageAsync(std::string path, bool tile)
 	}
 
 	mAsyncPending = false;
+	mTexturePath = path;
 
 	// Skip the fileExists() check used by setImage() — it calls stat64 which blocks
 	// on NAS. Instead, just hand the path to TextureResource and let the background
@@ -219,7 +220,7 @@ void ImageComponent::update(int deltaTime)
 	{
 		if(mTexture->updateTextureSize())
 		{
-			LOG(LogDebug) << "ImageComponent::update: async load complete, calling resize. size=" << mTexture->getSize().x() << "x" << mTexture->getSize().y();
+			LOG(LogDebug) << "ImageComponent::update: async load complete for " << mTexturePath << " size=" << mTexture->getSize().x() << "x" << mTexture->getSize().y();
 			mAsyncPending = false;
 			resize();
 		}

@@ -102,6 +102,7 @@ private:
 	bool mColorGradientHorizontal;
 
 	std::string mDefaultPath;
+	std::string mTexturePath;
 
 	std::shared_ptr<TextureResource> mTexture;
 	unsigned char			mFadeOpacity;
