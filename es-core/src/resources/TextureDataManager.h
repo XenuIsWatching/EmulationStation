@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 class TextureData;
 class TextureResource;
@@ -30,7 +31,7 @@ private:
 	std::list<std::shared_ptr<TextureData> > 										mTextureDataQ;
 	std::map<TextureData*, std::list<std::shared_ptr<TextureData> >::const_iterator > 	mTextureDataLookup;
 
-	std::thread*				mThread;
+	std::vector<std::thread*>	mThreads;
 	std::mutex					mMutex;
 	std::condition_variable		mEvent;
 	bool 						mExit;

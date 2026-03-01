@@ -143,23 +143,31 @@ void TextureDataManager::load(std::shared_ptr<TextureData> tex, bool block)
 
 TextureLoader::TextureLoader() : mExit(false)
 {
-	mThread = new std::thread(&TextureLoader::threadProc, this);
+	// Spawn worker threads for parallel texture loading.
+	unsigned int numThreads = std::thread::hardware_concurrency();
+	if (numThreads < 2)
+		numThreads = 2;
+	for (unsigned int i = 0; i < numThreads; i++)
+		mThreads.push_back(new std::thread(&TextureLoader::threadProc, this));
 }
 
 TextureLoader::~TextureLoader()
 {
 	// Clear the queue and signal exit atomically under the mutex so there is no
-	// race with the background thread's condition_variable wait (which holds the
-	// mutex while sleeping).
+	// race with the background threads' condition_variable wait.
 	{
 		std::unique_lock<std::mutex> lock(mMutex);
 		mTextureDataQ.clear();
 		mTextureDataLookup.clear();
 		mExit = true;
 	}
-	mEvent.notify_one();
-	mThread->join();
-	delete mThread;
+	mEvent.notify_all();
+	for (auto t : mThreads)
+	{
+		t->join();
+		delete t;
+	}
+	mThreads.clear();
 }
 
 void TextureLoader::threadProc()
@@ -170,7 +178,9 @@ void TextureLoader::threadProc()
 		{
 			// Wait for an event to say there is something in the queue
 			std::unique_lock<std::mutex> lock(mMutex);
-			mEvent.wait(lock);
+			mEvent.wait(lock, [this] { return mExit || !mTextureDataQ.empty(); });
+			if (mExit)
+				return;
 			if (!mTextureDataQ.empty())
 			{
 				textureData = mTextureDataQ.front();
@@ -213,7 +223,7 @@ void TextureLoader::load(std::shared_ptr<TextureData> textureData)
 		// Put it on the start of the queue as we want the newly requested textures to load first
 		mTextureDataQ.push_front(textureData);
 		mTextureDataLookup[textureData.get()] = mTextureDataQ.cbegin();
-		mEvent.notify_one();
+		mEvent.notify_all();
 	}
 }
 
