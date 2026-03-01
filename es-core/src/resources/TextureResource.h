@@ -28,6 +28,9 @@ public:
 	// Returns true if sizes are available (texture loaded), false if still pending.
 	bool updateTextureSize();
 
+	// Returns true if a previous load attempt permanently failed (e.g. file not found).
+	bool hasLoadFailed() const;
+
 	virtual ~TextureResource();
 
 	bool isInitialized() const;
