@@ -67,7 +67,7 @@ std::shared_ptr<TextureData> TextureDataManager::get(const TextureResource* key,
 		// Make sure it's loaded or queued for loading.
 		// Skip textures whose load previously failed (e.g. file not found) so
 		// we don't keep re-queuing them every frame they are rendered.
-		if (enableLoading && !tex->isLoadedOrFailed())
+		if (enableLoading && tex->loadStatus() == TextureData::LoadStatus::LOADING)
 			load(tex);
 	}
 	return tex;
@@ -91,7 +91,7 @@ size_t TextureDataManager::getTotalSize()
 	{
 		// Only count textures whose dimensions are known — calling width()/height()
 		// on an unloaded texture triggers a synchronous load().
-		if (tex->isLoaded())
+		if (tex->loadStatus() == TextureData::LoadStatus::LOADED)
 			total += tex->width() * tex->height() * 4;
 	}
 	return total;
@@ -113,7 +113,7 @@ size_t TextureDataManager::getQueueSize()
 void TextureDataManager::load(std::shared_ptr<TextureData> tex, bool block)
 {
 	// See if it's already loaded or has permanently failed
-	if (tex->isLoadedOrFailed())
+	if (tex->loadStatus() != TextureData::LoadStatus::LOADING)
 		return;
 	// Not loaded. Make sure there is room
 	size_t max_texture = (size_t)Settings::getInstance()->getInt("MaxVRAM") * 1024 * 1024;
@@ -199,7 +199,7 @@ void TextureLoader::threadProc()
 void TextureLoader::load(std::shared_ptr<TextureData> textureData)
 {
 	// Make sure it's not already loaded and hasn't permanently failed
-	if (!textureData->isLoadedOrFailed())
+	if (textureData->loadStatus() == TextureData::LoadStatus::LOADING)
 	{
 		std::unique_lock<std::mutex> lock(mMutex);
 		// Remove it from the queue if it is already there
@@ -239,7 +239,7 @@ size_t TextureLoader::getQueueSize()
 	std::unique_lock<std::mutex> lock(mMutex);
 	for (auto tex : mTextureDataQ)
 	{
-		if (tex->isLoaded())
+		if (tex->loadStatus() == TextureData::LoadStatus::LOADED)
 			mem += tex->width() * tex->height() * 4;
 	}
 	return mem;

@@ -144,24 +144,14 @@ bool TextureData::load()
 	return retval;
 }
 
-bool TextureData::isLoaded()
+TextureData::LoadStatus TextureData::loadStatus()
 {
 	std::unique_lock<std::mutex> lock(mMutex);
 	if (mDataRGBA || (mTextureID != 0))
-		return true;
-	return false;
-}
-
-bool TextureData::hasLoadFailed()
-{
-	std::unique_lock<std::mutex> lock(mMutex);
-	return mLoadFailed;
-}
-
-bool TextureData::isLoadedOrFailed()
-{
-	std::unique_lock<std::mutex> lock(mMutex);
-	return mDataRGBA || (mTextureID != 0) || mLoadFailed;
+		return LoadStatus::LOADED;
+	if (mLoadFailed)
+		return LoadStatus::FAILED;
+	return LoadStatus::LOADING;
 }
 
 bool TextureData::uploadAndBind()
