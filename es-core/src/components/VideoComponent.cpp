@@ -232,6 +232,13 @@ void VideoComponent::handleStartDelay()
 	// Only play if any delay has timed out
 	if (mStartDelayed)
 	{
+		// If the snapshot image is still loading, keep pushing the deadline forward
+		// so the delay doesn't expire before the user has had a chance to see it.
+		if (mConfig.showSnapshotDelay && mStaticImage.isAsyncPending())
+		{
+			mStartTime = SDL_GetTicks() + mConfig.startDelay;
+			return;
+		}
 		if (mStartTime > SDL_GetTicks())
 		{
 			// Timeout not yet completed

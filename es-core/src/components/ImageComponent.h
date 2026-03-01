@@ -82,6 +82,7 @@ public:
 	virtual std::vector<HelpPrompt> getHelpPrompts() override;
 
 	std::shared_ptr<TextureResource> getTexture() { return mTexture; };
+	bool isAsyncPending() const { return mAsyncPending; };
 private:
 	Vector2f mTargetSize;
 
