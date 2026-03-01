@@ -62,7 +62,8 @@ public:
 		BASIC,
 		DETAILED,
 		GRID,
-		VIDEO
+		VIDEO,
+		MARQUEE
 	};
 
 	ViewController::GameListViewType getGameListViewType();

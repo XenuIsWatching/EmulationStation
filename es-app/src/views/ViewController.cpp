@@ -8,6 +8,7 @@
 #include "views/gamelist/DetailedGameListView.h"
 #include "views/gamelist/IGameListView.h"
 #include "views/gamelist/GridGameListView.h"
+#include "views/gamelist/MarqueeGameListView.h"
 #include "views/gamelist/VideoGameListView.h"
 #include "views/SystemView.h"
 #include "views/UIModeController.h"
@@ -344,6 +345,8 @@ ViewController::GameListViewType ViewController::getGameListViewType()
 		selectedViewType = GRID;
 	if (viewPreference.compare("video") == 0)
 		selectedViewType = VIDEO;
+	if (viewPreference.compare("marquee") == 0)
+		selectedViewType = MARQUEE;
 
 	return selectedViewType;
 }
@@ -393,6 +396,9 @@ std::shared_ptr<IGameListView> ViewController::getGameListView(SystemData* syste
 			break;
 		case GRID:
 			view = std::shared_ptr<IGameListView>(new GridGameListView(mWindow, system->getRootFolder()));
+			break;
+		case MARQUEE:
+			view = std::shared_ptr<IGameListView>(new MarqueeGameListView(mWindow, system->getRootFolder()));
 			break;
 		case BASIC:
 		default:

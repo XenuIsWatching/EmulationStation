@@ -60,6 +60,8 @@ private:
 	virtual void startVideo() override;
 	// Stop the video
 	virtual void stopVideo() override;
+	// Begin async parse/prefetch of the video before playback starts
+	virtual void startParsing() override;
 	// Handle looping the video. Must be called periodically
 	virtual void handleLooping() override;
 

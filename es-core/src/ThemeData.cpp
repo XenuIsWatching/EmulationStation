@@ -10,7 +10,7 @@
 #include <pugixml.hpp>
 #include <algorithm>
 
-std::vector<std::string> ThemeData::sSupportedViews { { "system" }, { "basic" }, { "detailed" }, { "grid" }, { "video" } };
+std::vector<std::string> ThemeData::sSupportedViews { { "system" }, { "basic" }, { "detailed" }, { "grid" }, { "video" }, { "marquee" } };
 std::vector<std::string> ThemeData::sSupportedFeatures { { "video" }, { "carousel" }, { "z-index" }, { "visible" } };
 
 std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> ThemeData::sElementMap {
@@ -45,6 +45,20 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "animate", BOOLEAN },
 		{ "zIndex", FLOAT },
 		{ "scrollSound", PATH } } },
+	{ "marqueelist", {
+		{ "pos", RESOLUTION_PAIR },
+		{ "size", RESOLUTION_PAIR },
+		{ "itemHeight", FLOAT },
+		{ "itemSpacing", FLOAT },
+		{ "selectedScale", FLOAT },
+		{ "scrollAnimDuration", FLOAT },
+		{ "maxVisible", FLOAT },
+		{ "defaultImage", PATH },
+		{ "textFallbackColor", COLOR },
+		{ "textFallbackFont", PATH },
+		{ "textFallbackFontSize", RESOLUTION_FLOAT },
+		{ "scrollSound", PATH },
+		{ "zIndex", FLOAT } } },
 	{ "gridtile", {
 		{ "size", RESOLUTION_PAIR },
 		{ "padding", RESOLUTION_PAIR },

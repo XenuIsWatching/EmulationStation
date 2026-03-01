@@ -270,7 +270,11 @@ void VideoComponent::startVideoWithDelay()
 		}
 		else
 		{
-			// Configure the start delay
+			// Start parsing now so it overlaps with the delay period.
+			// By the time the delay expires, VLC may already have the
+			// metadata needed to begin playback immediately.
+			startParsing();
+
 			mStartDelayed = true;
 			mFadeIn = 0.0f;
 			mStartTime = SDL_GetTicks() + mConfig.startDelay;

@@ -78,6 +78,7 @@ static void display(void* /*data*/, void* /*id*/) {
 
 VideoVlcComponent::VideoVlcComponent(Window* window, std::string subtitles) :
 	VideoComponent(window),
+	mMedia(nullptr),
 	mMediaPlayer(nullptr),
 	mMediaParsing(false)
 {
@@ -278,6 +279,14 @@ void VideoVlcComponent::handleLooping()
 void VideoVlcComponent::startVideo()
 {
 	if (!mIsPlaying && !mMediaParsing) {
+		// If startParsing() already ran and the parse has completed, mMedia is
+		// set but mMediaParsing is false.  Skip straight to onMediaParsed().
+		if (mMedia)
+		{
+			onMediaParsed();
+			return;
+		}
+
 		mVideoWidth = 0;
 		mVideoHeight = 0;
 
@@ -304,6 +313,21 @@ void VideoVlcComponent::startVideo()
 	}
 }
 
+void VideoVlcComponent::startParsing()
+{
+	if (mMediaParsing || mMedia || mIsPlaying)
+		return;
+	std::string path(mVideoPath);
+	if (!mVLC || path.empty())
+		return;
+	mMedia = libvlc_media_new_path(mVLC, path.c_str());
+	if (mMedia)
+	{
+		libvlc_media_parse_with_options(mMedia, libvlc_media_fetch_local, -1);
+		mMediaParsing = true;
+	}
+}
+
 void VideoVlcComponent::handleParsing()
 {
 	if (!mMediaParsing || !mMedia)
@@ -314,6 +338,11 @@ void VideoVlcComponent::handleParsing()
 		return;
 
 	mMediaParsing = false;
+	// If we are still in the start-delay window, leave mMedia in place so
+	// startVideo() can pick it up when the delay expires rather than starting
+	// playback before the user has had a chance to see the snapshot.
+	if (mStartDelayed)
+		return;
 	onMediaParsed();
 }
 

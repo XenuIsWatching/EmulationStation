@@ -78,6 +78,8 @@ private:
 	virtual void startVideo() = 0;
 	// Stop the video
 	virtual void stopVideo() { };
+	// Begin async parse/prefetch of the video before playback starts
+	virtual void startParsing() { }
 	// Handle looping the video. Must be called periodically
 	virtual void handleLooping();
 
