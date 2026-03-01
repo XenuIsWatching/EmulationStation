@@ -175,16 +175,6 @@ Vector2f TextureResource::getSourceImageSize() const
 	return mSourceSize;
 }
 
-bool TextureResource::hasLoadFailed() const
-{
-	std::shared_ptr<TextureData> data;
-	if (mTextureData != nullptr)
-		data = mTextureData;
-	else
-		data = sTextureDataManager.get(this, false);
-	return data && data->loadStatus() == TextureData::LoadStatus::FAILED;
-}
-
 bool TextureResource::updateTextureSize()
 {
 	// If sizes are already known, nothing to do

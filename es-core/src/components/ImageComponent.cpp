@@ -414,9 +414,9 @@ void ImageComponent::render(const Transform4x4f& parentTrans)
 	}
 	else if(mTexture && mAsyncPending)
 	{
-		// Clear mAsyncPending for failed loads even when update() isn't being called
+		// Resolve mAsyncPending for failed loads even when update() isn't being called
 		// (e.g. game list rendered in background during system carousel transition).
-		if(mTexture->hasLoadFailed())
+		if(mTexture->updateTextureSize())
 		{
 			mAsyncPending = false;
 		}
