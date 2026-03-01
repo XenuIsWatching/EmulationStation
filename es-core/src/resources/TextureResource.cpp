@@ -188,16 +188,27 @@ bool TextureResource::updateTextureSize()
 	else
 		data = sTextureDataManager.get(this, false);
 
-	if (data && data->isLoaded())
-	{
-		// The background thread has finished loading - read dimensions now
-		// (safe because isLoaded() guarantees data is available via mutex ordering)
-		mSize = Vector2i((int)data->width(), (int)data->height());
-		mSourceSize = Vector2f(data->sourceWidth(), data->sourceHeight());
-		return true;
-	}
+	if (!data)
+		return false;
 
-	return false;
+	switch (data->loadStatus())
+	{
+		case TextureData::LoadStatus::LOADED:
+			// The background thread has finished — read dimensions now
+			// (safe because LOADED guarantees data is available via mutex ordering)
+			mSize = Vector2i((int)data->width(), (int)data->height());
+			mSourceSize = Vector2f(data->sourceWidth(), data->sourceHeight());
+			return true;
+
+		case TextureData::LoadStatus::FAILED:
+			// Permanently failed (e.g. file not found). Treat as done so callers
+			// don't keep polling. mSize stays (0,0) — image simply won't display.
+			return true;
+
+		case TextureData::LoadStatus::LOADING:
+		default:
+			return false;
+	}
 }
 
 bool TextureResource::isInitialized() const
@@ -244,7 +255,7 @@ bool TextureResource::unload()
 	else
 		data = mTextureData;
 
-	if (data != nullptr && data->isLoaded())
+	if (data != nullptr && data->loadStatus() == TextureData::LoadStatus::LOADED)
 	{
 		data->releaseVRAM();
 		data->releaseRAM();
@@ -259,7 +270,7 @@ void TextureResource::reload()
 {
 	// For dynamically loaded textures the texture manager will load them on demand.
 	// For manually loaded textures we have to reload them here
-	if (mTextureData && !mTextureData->isLoaded())
+	if (mTextureData && mTextureData->loadStatus() == TextureData::LoadStatus::LOADING)
 		mTextureData->load();
 
 	// Uncomment this 2 lines in future release in order to reload texture VRAM exactly as it was before

@@ -176,6 +176,7 @@ void ImageComponent::setImageAsync(std::string path, bool tile)
 	}
 
 	mAsyncPending = false;
+	mTexturePath = path;
 
 	// Skip the fileExists() check used by setImage() — it calls stat64 which blocks
 	// on NAS. Instead, just hand the path to TextureResource and let the background
@@ -219,7 +220,7 @@ void ImageComponent::update(int deltaTime)
 	{
 		if(mTexture->updateTextureSize())
 		{
-			LOG(LogDebug) << "ImageComponent::update: async load complete, calling resize. size=" << mTexture->getSize().x() << "x" << mTexture->getSize().y();
+			LOG(LogDebug) << "ImageComponent::update: async load complete for " << mTexturePath << " size=" << mTexture->getSize().x() << "x" << mTexture->getSize().y();
 			mAsyncPending = false;
 			resize();
 		}
@@ -413,10 +414,18 @@ void ImageComponent::render(const Transform4x4f& parentTrans)
 	}
 	else if(mTexture && mAsyncPending)
 	{
-		// Debug: log when we're skipping render due to async pending
-		static int skipCount = 0;
-		if(++skipCount % 60 == 1) // log every ~1 second at 60fps
-			LOG(LogDebug) << "render: skipping due to mAsyncPending, mSize=" << mSize.x() << "x" << mSize.y() << " opacity=" << (int)mOpacity;
+		// Resolve mAsyncPending for failed loads even when update() isn't being called
+		// (e.g. game list rendered in background during system carousel transition).
+		if(mTexture->updateTextureSize())
+		{
+			mAsyncPending = false;
+		}
+		else
+		{
+			static int skipCount = 0;
+			if(++skipCount % 60 == 1) // log every ~1 second at 60fps
+				LOG(LogDebug) << "render: skipping due to mAsyncPending for " << mTexturePath << " mSize=" << mSize.x() << "x" << mSize.y() << " opacity=" << (int)mOpacity;
+		}
 	}
 
 	GuiComponent::renderChildren(trans);
