@@ -417,7 +417,7 @@ void ImageComponent::render(const Transform4x4f& parentTrans)
 		// Debug: log when we're skipping render due to async pending
 		static int skipCount = 0;
 		if(++skipCount % 60 == 1) // log every ~1 second at 60fps
-			LOG(LogDebug) << "render: skipping due to mAsyncPending, mSize=" << mSize.x() << "x" << mSize.y() << " opacity=" << (int)mOpacity;
+			LOG(LogDebug) << "render: skipping due to mAsyncPending for " << mTexturePath << " mSize=" << mSize.x() << "x" << mSize.y() << " opacity=" << (int)mOpacity;
 	}
 
 	GuiComponent::renderChildren(trans);
