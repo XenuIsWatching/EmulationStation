@@ -7,8 +7,8 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <thread>
-#include <vector>
 
 class TextureData;
 class TextureResource;
@@ -25,15 +25,18 @@ public:
 	size_t getQueueSize();
 
 private:
-	void processQueue();
-	void threadProc();
+	void workerFunc(std::shared_ptr<TextureData> textureData);
 
+	// Textures currently being loaded by an active thread (dedup + concurrency tracking)
+	std::set<TextureData*>															mActiveLoads;
+
+	// Pending queue: textures waiting for a concurrency slot
 	std::list<std::shared_ptr<TextureData> > 										mTextureDataQ;
 	std::map<TextureData*, std::list<std::shared_ptr<TextureData> >::const_iterator > 	mTextureDataLookup;
 
-	std::vector<std::thread*>	mThreads;
 	std::mutex					mMutex;
-	std::condition_variable		mEvent;
+	std::condition_variable		mDrainEvent;
+	unsigned int				mMaxConcurrent;
 	bool 						mExit;
 };
 

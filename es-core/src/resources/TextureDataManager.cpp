@@ -2,6 +2,7 @@
 
 #include "resources/TextureData.h"
 #include "resources/TextureResource.h"
+#include "Log.h"
 #include "Settings.h"
 
 TextureDataManager::TextureDataManager()
@@ -143,93 +144,107 @@ void TextureDataManager::load(std::shared_ptr<TextureData> tex, bool block)
 
 TextureLoader::TextureLoader() : mExit(false)
 {
-	// Spawn worker threads for parallel texture loading.
-	unsigned int numThreads = std::thread::hardware_concurrency();
-	if (numThreads < 2)
-		numThreads = 2;
-	for (unsigned int i = 0; i < numThreads; i++)
-		mThreads.push_back(new std::thread(&TextureLoader::threadProc, this));
+	mMaxConcurrent = std::thread::hardware_concurrency();
+	if (mMaxConcurrent < 2)
+		mMaxConcurrent = 2;
+	// No threads created here — they are spawned on demand by load().
 }
 
 TextureLoader::~TextureLoader()
 {
-	// Clear the queue and signal exit atomically under the mutex so there is no
-	// race with the background threads' condition_variable wait.
-	{
-		std::unique_lock<std::mutex> lock(mMutex);
-		mTextureDataQ.clear();
-		mTextureDataLookup.clear();
-		mExit = true;
-	}
-	mEvent.notify_all();
-	for (auto t : mThreads)
-	{
-		t->join();
-		delete t;
-	}
-	mThreads.clear();
+	// Clear the pending queue and wait for all active threads to finish.
+	std::unique_lock<std::mutex> lock(mMutex);
+	mTextureDataQ.clear();
+	mTextureDataLookup.clear();
+	mExit = true;
+	mDrainEvent.wait(lock, [this] { return mActiveLoads.empty(); });
 }
 
-void TextureLoader::threadProc()
+void TextureLoader::workerFunc(std::shared_ptr<TextureData> textureData)
 {
-	while (!mExit)
+	while (textureData)
 	{
-		std::shared_ptr<TextureData> textureData;
-		{
-			// Wait for an event to say there is something in the queue
-			std::unique_lock<std::mutex> lock(mMutex);
-			mEvent.wait(lock, [this] { return mExit || !mTextureDataQ.empty(); });
-			if (mExit)
-				return;
-			if (!mTextureDataQ.empty())
-			{
-				textureData = mTextureDataQ.front();
-				mTextureDataQ.pop_front();
-				mTextureDataLookup.erase(mTextureDataLookup.find(textureData.get()));
-			}
-		}
-		// Queue has been released here but we might have a texture to process
-		while (textureData)
+		// Load the texture — long I/O operation, done outside the lock.
+		// TextureData::load() is thread-safe (has its own mutex).
+		// On failure it sets mLoadFailed internally; loadStatus() returns FAILED.
+		try
 		{
 			textureData->load();
+		}
+		catch (...)
+		{
+			LOG(LogError) << "Unexpected exception loading texture";
+		}
 
-			// See if there is another item in the queue
-			textureData = nullptr;
-			std::unique_lock<std::mutex> lock(mMutex);
-			if (!mTextureDataQ.empty())
+		// Under lock: clean up and check for next pending item
+		std::unique_lock<std::mutex> lock(mMutex);
+		mActiveLoads.erase(textureData.get());
+		textureData.reset();
+
+		// Try to pick up the next pending texture that still needs loading
+		while (!mExit && !mTextureDataQ.empty())
+		{
+			std::shared_ptr<TextureData> next = mTextureDataQ.front();
+			mTextureDataQ.pop_front();
+			mTextureDataLookup.erase(next.get());
+
+			if (next->loadStatus() == TextureData::LoadStatus::LOADING)
 			{
-				textureData = mTextureDataQ.front();
-				mTextureDataQ.pop_front();
-				mTextureDataLookup.erase(mTextureDataLookup.find(textureData.get()));
+				// Reuse this thread for the next item (transfer the concurrency slot)
+				mActiveLoads.insert(next.get());
+				textureData = std::move(next);
+				break;
 			}
+			// else: already loaded or failed, skip
 		}
 	}
+
+	// No more work or exiting — signal so destructor can proceed
+	std::unique_lock<std::mutex> lock(mMutex);
+	mDrainEvent.notify_all();
 }
 
 void TextureLoader::load(std::shared_ptr<TextureData> textureData)
 {
 	// Make sure it's not already loaded and hasn't permanently failed
-	if (textureData->loadStatus() == TextureData::LoadStatus::LOADING)
-	{
-		std::unique_lock<std::mutex> lock(mMutex);
-		// Remove it from the queue if it is already there
-		auto td = mTextureDataLookup.find(textureData.get());
-		if (td != mTextureDataLookup.cend())
-		{
-			mTextureDataQ.erase((*td).second);
-			mTextureDataLookup.erase(td);
-		}
+	if (textureData->loadStatus() != TextureData::LoadStatus::LOADING)
+		return;
 
+	std::unique_lock<std::mutex> lock(mMutex);
+	if (mExit)
+		return;
+
+	// Already being loaded by an active thread — skip
+	if (mActiveLoads.count(textureData.get()) > 0)
+		return;
+
+	// Remove from pending queue if already queued (will re-add at front)
+	auto td = mTextureDataLookup.find(textureData.get());
+	if (td != mTextureDataLookup.cend())
+	{
+		mTextureDataQ.erase((*td).second);
+		mTextureDataLookup.erase(td);
+	}
+
+	// Spawn a thread immediately if under concurrency limit, otherwise queue
+	if (mActiveLoads.size() < mMaxConcurrent)
+	{
+		mActiveLoads.insert(textureData.get());
+		std::thread(&TextureLoader::workerFunc, this, textureData).detach();
+	}
+	else
+	{
 		// Put it on the start of the queue as we want the newly requested textures to load first
 		mTextureDataQ.push_front(textureData);
 		mTextureDataLookup[textureData.get()] = mTextureDataQ.cbegin();
-		mEvent.notify_all();
 	}
 }
 
 void TextureLoader::remove(std::shared_ptr<TextureData> textureData)
 {
-	// Just remove it from the queue so we don't attempt to load it
+	// Just remove it from the queue so we don't attempt to load it.
+	// If it's currently being loaded by an active thread, let it finish —
+	// we can't cancel in-progress I/O.
 	std::unique_lock<std::mutex> lock(mMutex);
 	auto td = mTextureDataLookup.find(textureData.get());
 	if (td != mTextureDataLookup.cend())
