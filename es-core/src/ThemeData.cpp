@@ -517,7 +517,9 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 			break;
 		case PATH:
 		{
-			std::string path = Utils::FileSystem::resolveRelativePath(str, mPaths.back(), true, false);
+			std::string path = (str.size() >= 2 && str[0] == ':' && str[1] == '/')
+				? str
+				: Utils::FileSystem::resolveRelativePath(str, mPaths.back(), true, false);
 			if(!ResourceManager::getInstance()->fileExists(path))
 			{
 				std::stringstream ss;
