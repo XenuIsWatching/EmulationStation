@@ -94,7 +94,6 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "lineSpacing", FLOAT },
 		{ "favoriteIconPath", PATH },
 		{ "favoriteIconColor", COLOR },
-		{ "favoriteIconVisible", BOOLEAN },
 		{ "zIndex", FLOAT } } },
 	{ "container", {
 		{ "pos", RESOLUTION_PAIR },
@@ -561,6 +560,14 @@ bool ThemeData::hasView(const std::string& view)
 {
 	auto viewIt = mViews.find(view);
 	return (viewIt != mViews.cend());
+}
+
+std::string ThemeData::getVariable(const std::string& name) const
+{
+	auto it = mVariables.find(name);
+	if (it != mVariables.cend())
+		return it->second;
+	return "";
 }
 
 const ThemeData::ThemeElement* ThemeData::getElement(const std::string& view, const std::string& element, const std::string& expectedType) const

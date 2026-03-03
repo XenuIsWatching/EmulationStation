@@ -528,10 +528,10 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	else
 		mFavoriteIcon.setColorShift(0xFFFFFFFF);
 
-	if (elem->has("favoriteIconVisible"))
-		mFavoriteIconVisible = elem->get<bool>("favoriteIconVisible");
-	else
-		mFavoriteIconVisible = true;
+	{
+		std::string var = theme->getVariable("favoriteIconVisible");
+		mFavoriteIconVisible = (var == "true");
+	}
 }
 
 #endif // ES_APP_COMPONENTS_TEXT_LIST_COMPONENT_H
