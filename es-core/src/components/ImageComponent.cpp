@@ -4,6 +4,7 @@
 #include "Log.h"
 #include "Settings.h"
 #include "ThemeData.h"
+#include <SDL_timer.h>
 
 Vector2i ImageComponent::getTextureSize() const
 {
@@ -204,6 +205,7 @@ void ImageComponent::setImageAsync(std::string path, bool tile)
 			// Texture is loading in background - resize() will be called from update() when ready
 			LOG(LogDebug) << "setImageAsync: queued async for " << path;
 			mAsyncPending = true;
+			mAsyncStartTime = SDL_GetTicks();
 		}
 	}
 	else
@@ -220,7 +222,7 @@ void ImageComponent::update(int deltaTime)
 	{
 		if(mTexture->updateTextureSize())
 		{
-			LOG(LogDebug) << "ImageComponent::update: async load complete for " << mTexturePath << " size=" << mTexture->getSize().x() << "x" << mTexture->getSize().y();
+			LOG(LogDebug) << "ImageComponent::update: async load complete for " << mTexturePath << " size=" << mTexture->getSize().x() << "x" << mTexture->getSize().y() << " time=" << (SDL_GetTicks() - mAsyncStartTime) << "ms";
 			mAsyncPending = false;
 			resize();
 		}

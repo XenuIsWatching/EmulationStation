@@ -112,6 +112,7 @@ private:
 	bool					mDynamic;
 	bool					mRotateByTargetSize;
 	bool					mAsyncPending;
+	int						mAsyncStartTime;
 
 	Vector2f mTopLeftCrop;
 	Vector2f mBottomRightCrop;
