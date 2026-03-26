@@ -18,6 +18,7 @@
 #include "Settings.h"
 #include "SystemData.h"
 #include "SystemScreenSaver.h"
+#include "components/VideoVlcComponent.h"
 #include <SDL_events.h>
 #include <SDL_main.h>
 #include <SDL_timer.h>
@@ -482,6 +483,11 @@ int main(int argc, char* argv[])
 
 	InputManager::getInstance()->deinit();
 	window.deinit();
+
+	// Join the VLC cleanup worker and release the VLC instance. Must happen after
+	// window.deinit() so all VideoVlcComponents are destroyed and their final
+	// stopVideo() cleanup tasks are already posted to the queue.
+	VideoVlcComponent::deinit();
 
 	MameNames::deinit();
 	CollectionSystemManager::deinit();

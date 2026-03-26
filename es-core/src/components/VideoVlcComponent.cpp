@@ -23,6 +23,7 @@ std::mutex               VideoVlcComponent::sCleanupMutex;
 std::condition_variable  VideoVlcComponent::sCleanupCond;
 std::deque<std::function<void()>> VideoVlcComponent::sCleanupQueue;
 bool                     VideoVlcComponent::sCleanupRunning = false;
+bool                     VideoVlcComponent::sCleanupExit = false;
 
 void VideoVlcComponent::cleanupWorker()
 {
@@ -31,7 +32,9 @@ void VideoVlcComponent::cleanupWorker()
 		std::function<void()> task;
 		{
 			std::unique_lock<std::mutex> lock(sCleanupMutex);
-			sCleanupCond.wait(lock, [] { return !sCleanupQueue.empty(); });
+			sCleanupCond.wait(lock, [] { return !sCleanupQueue.empty() || sCleanupExit; });
+			if (sCleanupQueue.empty())
+				break; // exit flag set and no remaining work
 			task = std::move(sCleanupQueue.front());
 			sCleanupQueue.pop_front();
 		}
@@ -48,11 +51,30 @@ void VideoVlcComponent::postCleanupTask(std::function<void()> task)
 		{
 			sCleanupRunning = true;
 			sCleanupThread = std::thread(cleanupWorker);
-			sCleanupThread.detach();
+			// Thread is kept joinable — deinit() will join it on shutdown.
 		}
 		sCleanupQueue.push_back(std::move(task));
 	}
 	sCleanupCond.notify_one();
+}
+
+void VideoVlcComponent::deinit()
+{
+	// Signal the worker thread to exit once the queue is drained
+	{
+		std::lock_guard<std::mutex> lock(sCleanupMutex);
+		sCleanupExit = true;
+	}
+	sCleanupCond.notify_one();
+
+	if (sCleanupRunning && sCleanupThread.joinable())
+		sCleanupThread.join();
+
+	if (mVLC)
+	{
+		libvlc_release(mVLC);
+		mVLC = nullptr;
+	}
 }
 
 // VLC prepares to render a video frame.
