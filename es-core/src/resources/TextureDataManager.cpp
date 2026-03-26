@@ -126,12 +126,15 @@ void TextureDataManager::load(std::shared_ptr<TextureData> tex, bool block)
 		{
 			if (size < max_texture)
 				break;
-			//size -= (*it)->getVRAMUsage();
+			// Only evict textures that actually have data in RAM or VRAM.
+			// Evicting a LOADING texture frees no memory (getVRAMUsage()==0) and cancels
+			// its pending background load — which then gets immediately re-queued on the
+			// next bind(), triggering another eviction cycle. Skipping these breaks the
+			// evict→cancel→re-queue→evict cascade that causes non-stop texture flickering.
+			if ((*it)->loadStatus() != TextureData::LoadStatus::LOADED)
+				continue;
 			(*it)->releaseVRAM();
 			(*it)->releaseRAM();
-			// It may be already in the loader queue. In this case it wouldn't have been using
-			// any VRAM yet but it will be. Remove it from the loader queue
-			mLoader->remove(*it);
 			size = TextureResource::getTotalMemUsage();
 		}
 	}
