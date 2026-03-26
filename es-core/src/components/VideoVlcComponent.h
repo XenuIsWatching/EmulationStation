@@ -52,6 +52,10 @@ public:
 	// Never breaks the aspect ratio. setMaxSize() and setResize() are mutually exclusive.
 	void setMaxSize(float width, float height) override;
 
+	// Signal the cleanup worker to exit and wait for it to finish.
+	// Must be called after all VideoVlcComponent instances are destroyed.
+	static void deinit();
+
 private:
 	// Calculates the correct mSize from our resizing information (set by setResize/setMaxSize).
 	// Used internally whenever the resizing parameters or texture change.
@@ -85,6 +89,7 @@ private:
 	static std::condition_variable	sCleanupCond;
 	static std::deque<std::function<void()>> sCleanupQueue;
 	static bool						sCleanupRunning;
+	static bool						sCleanupExit;
 	libvlc_media_t*					mMedia;
 	libvlc_media_player_t*			mMediaPlayer;
 	VideoContext*				mContext;
