@@ -8,7 +8,6 @@
 #include "views/gamelist/DetailedGameListView.h"
 #include "views/gamelist/IGameListView.h"
 #include "views/gamelist/GridGameListView.h"
-#include "views/gamelist/SearchGameListView.h"
 #include "views/gamelist/VideoGameListView.h"
 #include "views/SystemView.h"
 #include "views/UIModeController.h"
@@ -360,12 +359,6 @@ std::shared_ptr<IGameListView> ViewController::getGameListView(SystemData* syste
 	//if we didn't, make it, remember it, and return it
 	std::shared_ptr<IGameListView> view;
 
-	// Special case: search system gets its own custom view
-	if (system->getName() == "search")
-	{
-		view = std::shared_ptr<IGameListView>(new SearchGameListView(mWindow, system->getRootFolder()));
-	}
-	else
 	{
 		bool themeHasVideoView = system->getTheme()->hasView("video");
 

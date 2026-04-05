@@ -226,6 +226,8 @@ std::vector<HelpPrompt> BasicGameListView::getHelpPrompts()
 		std::string prompt = CollectionSystemManager::get()->getEditingCollection();
 		prompts.push_back(HelpPrompt("y", prompt));
 	}
+	if (mRoot->getSystem()->isGameSystem() && !UIModeController::getInstance()->isUIModeKid())
+		prompts.push_back(HelpPrompt("rt", "search"));
 	return prompts;
 }
 
