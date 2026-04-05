@@ -47,6 +47,7 @@ private:
 	void cancelSearch();
 	void populateResultsList(const std::vector<FileData*>& results);
 	void addPlaceholder(const std::string& text);
+	void updateFocusVisuals();
 
 	// Standard themed elements (mirrors ISimpleGameListView)
 	ImageComponent mBackground;
@@ -76,6 +77,10 @@ private:
 	enum FocusTarget { FOCUS_CHAR_ROW, FOCUS_RESULT_LIST };
 	FocusTarget mFocus;
 	bool mIsActive;
+
+	// Themed selector color for result list (stored so we can hide/restore it)
+	unsigned int mThemedSelectorColor;
+	unsigned int mThemedSelectorColorEnd;
 };
 
 #endif // ES_APP_VIEWS_GAME_LIST_SEARCH_GAME_LIST_VIEW_H

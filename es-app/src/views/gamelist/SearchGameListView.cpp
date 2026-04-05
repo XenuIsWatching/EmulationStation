@@ -14,7 +14,8 @@ SearchGameListView::SearchGameListView(Window* window, FileData* root)
 	  mBackground(window), mHeaderText(window), mHeaderImage(window),
 	  mSearchText(window), mCharRow(window), mResultList(window),
 	  mCancelFlag(false), mResultsReady(false),
-	  mFocus(FOCUS_CHAR_ROW), mIsActive(false), mCursorPos(0)
+	  mFocus(FOCUS_CHAR_ROW), mIsActive(false), mCursorPos(0),
+	  mThemedSelectorColor(0x000000FF), mThemedSelectorColorEnd(0x000000FF)
 {
 	const float screenW = mSize.x();
 	const float screenH = mSize.y();
@@ -235,6 +236,7 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 				if (input.id == SDLK_DOWN)
 				{
 					mFocus = FOCUS_RESULT_LIST;
+					updateFocusVisuals();
 					return true;
 				}
 				if (input.id == SDLK_BACKSPACE)
@@ -291,6 +293,7 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 			if (config->isMappedLike("down", input))
 			{
 				mFocus = FOCUS_RESULT_LIST;
+				updateFocusVisuals();
 				return true;
 			}
 
@@ -306,6 +309,7 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 				if (mResultList.getCursorIndex() == 0)
 				{
 					mFocus = FOCUS_CHAR_ROW;
+					updateFocusVisuals();
 					return true;
 				}
 				// Otherwise let the list scroll up normally
@@ -428,6 +432,17 @@ void SearchGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	// Apply theme to the result list
 	mResultList.applyTheme(theme, getName(), "gamelist", ALL);
 
+	// Store the themed selector colors so we can hide/restore them with focus changes
+	const ThemeData::ThemeElement* gamelistElem = theme->getElement(getName(), "gamelist", "textlist");
+	if (gamelistElem && gamelistElem->has("selectorColor"))
+		mThemedSelectorColor = gamelistElem->get<unsigned int>("selectorColor");
+	else
+		mThemedSelectorColor = 0x000000FF;
+	if (gamelistElem && gamelistElem->has("selectorColorEnd"))
+		mThemedSelectorColorEnd = gamelistElem->get<unsigned int>("selectorColorEnd");
+	else
+		mThemedSelectorColorEnd = mThemedSelectorColor;
+
 	// Position search-specific elements (search text + char row) just above the result list
 	float listY = mResultList.getPosition().y();
 	float rowH  = mSize.y() * 0.06f;
@@ -436,7 +451,26 @@ void SearchGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	mSearchText.setPosition(0, listY - rowH * 2.0f);
 	mSearchText.setSize(mSize.x(), rowH);
 
+	updateFocusVisuals();
 	sortChildren();
+}
+
+void SearchGameListView::updateFocusVisuals()
+{
+	bool charRowFocused = (mFocus == FOCUS_CHAR_ROW);
+	mCharRow.setFocused(charRowFocused);
+
+	// Hide the result list selector when it doesn't have focus
+	if (charRowFocused)
+	{
+		mResultList.setSelectorColor(0x00000000);
+		mResultList.setSelectorColorEnd(0x00000000);
+	}
+	else
+	{
+		mResultList.setSelectorColor(mThemedSelectorColor);
+		mResultList.setSelectorColorEnd(mThemedSelectorColorEnd);
+	}
 }
 
 void SearchGameListView::launch(FileData* game)

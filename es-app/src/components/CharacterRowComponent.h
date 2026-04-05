@@ -27,6 +27,7 @@ public:
 	void setFont(const std::shared_ptr<Font>& font) { mFont = font; }
 	void setSelectorColor(unsigned int color) { mSelectorColor = color; }
 	void setTextColor(unsigned int color) { mTextColor = color; }
+	void setFocused(bool focused) { mFocused = focused; }
 
 	int getCursor() const { return mCursor; }
 
@@ -35,6 +36,7 @@ private:
 
 	Mode mMode;
 	int mCursor;
+	bool mFocused;
 	std::vector<std::string> mChars;
 
 	std::function<void(const std::string&)> mCharSelectedCb;

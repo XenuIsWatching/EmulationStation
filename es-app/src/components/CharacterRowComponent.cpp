@@ -12,7 +12,7 @@ const std::string CharacterRowComponent::CHAR_CURSOR_LEFT    = "<-";
 const std::string CharacterRowComponent::CHAR_CURSOR_RIGHT   = "->";
 
 CharacterRowComponent::CharacterRowComponent(Window* window)
-	: GuiComponent(window), mMode(LETTERS), mCursor(2), mSelectorColor(0x000050FF), mTextColor(0xFFFFFFFF)
+	: GuiComponent(window), mMode(LETTERS), mCursor(2), mFocused(true), mSelectorColor(0x000050FF), mTextColor(0xFFFFFFFF)
 {
 	mFont = Font::get(FONT_SIZE_MEDIUM);
 	buildCharList();
@@ -168,8 +168,8 @@ void CharacterRowComponent::render(const Transform4x4f& parentTrans)
 	{
 		float cellWidth = charWidths[i];
 
-		// Draw selector background for current item
-		if (i == mCursor)
+		// Draw selector background for current item (only when focused)
+		if (mFocused && i == mCursor)
 		{
 			Renderer::drawRect(Math::round(x), 0, Math::round(cellWidth), Math::round(height),
 				mSelectorColor, mSelectorColor);
