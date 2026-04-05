@@ -6,13 +6,14 @@
 #include "Settings.h"
 #include "Log.h"
 #include "utils/StringUtil.h"
+#include <cstring>
 
 SearchGameListView::SearchGameListView(Window* window, FileData* root)
 	: IGameListView(window, root),
 	  mHeaderText(window), mSearchText(window),
 	  mCharRow(window), mResultList(window),
 	  mCancelFlag(false), mResultsReady(false),
-	  mFocus(FOCUS_CHAR_ROW)
+	  mFocus(FOCUS_CHAR_ROW), mIsActive(false), mCursorPos(0)
 {
 	const float screenW = mSize.x();
 	const float screenH = mSize.y();
@@ -44,22 +45,33 @@ SearchGameListView::SearchGameListView(Window* window, FileData* root)
 	addChild(&mCharRow);
 
 	mCharRow.setCharSelectedCallback([this](const std::string& ch) {
-		mQuery += ch;
-		mSearchText.setText(mQuery + "_");
+		mQuery.insert(mCursorPos, ch);
+		mCursorPos += ch.size();
+		updateSearchDisplay();
 		startSearch(mQuery);
 	});
 
 	mCharRow.setBackspaceCallback([this]() {
-		if (!mQuery.empty())
+		if (mCursorPos > 0)
 		{
-			size_t cursor = Utils::String::prevCursor(mQuery, mQuery.size());
-			mQuery.erase(cursor);
+			size_t prev = Utils::String::prevCursor(mQuery, mCursorPos);
+			mQuery.erase(prev, mCursorPos - prev);
+			mCursorPos = prev;
 		}
-		if (mQuery.empty())
-			mSearchText.setText("");
-		else
-			mSearchText.setText(mQuery + "_");
+		updateSearchDisplay();
 		startSearch(mQuery);
+	});
+
+	mCharRow.setCursorLeftCallback([this]() {
+		if (mCursorPos > 0)
+			mCursorPos = Utils::String::prevCursor(mQuery, mCursorPos);
+		updateSearchDisplay();
+	});
+
+	mCharRow.setCursorRightCallback([this]() {
+		if (mCursorPos < mQuery.size())
+			mCursorPos = Utils::String::nextCursor(mQuery, mCursorPos);
+		updateSearchDisplay();
 	});
 
 	// Result list
@@ -76,6 +88,13 @@ SearchGameListView::SearchGameListView(Window* window, FileData* root)
 SearchGameListView::~SearchGameListView()
 {
 	cancelSearch();
+}
+
+void SearchGameListView::updateSearchDisplay()
+{
+	// Render cursor as underscore inserted at cursor position
+	std::string display = mQuery.substr(0, mCursorPos) + "_" + mQuery.substr(mCursorPos);
+	mSearchText.setText(display);
 }
 
 void SearchGameListView::buildGameCache()
@@ -192,6 +211,62 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 			return true;
 		}
 
+		// Physical keyboard text editing keys
+		if (config->getDeviceId() == DEVICE_KEYBOARD)
+		{
+			if (input.id == SDLK_BACKSPACE)
+			{
+				// Delete character before cursor
+				if (mCursorPos > 0)
+				{
+					size_t prev = Utils::String::prevCursor(mQuery, mCursorPos);
+					mQuery.erase(prev, mCursorPos - prev);
+					mCursorPos = prev;
+				}
+				updateSearchDisplay();
+				startSearch(mQuery);
+				return true;
+			}
+			if (input.id == SDLK_DELETE)
+			{
+				// Delete character at cursor
+				if (mCursorPos < mQuery.size())
+				{
+					size_t next = Utils::String::nextCursor(mQuery, mCursorPos);
+					mQuery.erase(mCursorPos, next - mCursorPos);
+				}
+				updateSearchDisplay();
+				startSearch(mQuery);
+				return true;
+			}
+			if (input.id == SDLK_HOME)
+			{
+				mCursorPos = 0;
+				updateSearchDisplay();
+				return true;
+			}
+			if (input.id == SDLK_END)
+			{
+				mCursorPos = mQuery.size();
+				updateSearchDisplay();
+				return true;
+			}
+			if (input.id == SDLK_LEFT)
+			{
+				if (mCursorPos > 0)
+					mCursorPos = Utils::String::prevCursor(mQuery, mCursorPos);
+				updateSearchDisplay();
+				return true;
+			}
+			if (input.id == SDLK_RIGHT)
+			{
+				if (mCursorPos < mQuery.size())
+					mCursorPos = Utils::String::nextCursor(mQuery, mCursorPos);
+				updateSearchDisplay();
+				return true;
+			}
+		}
+
 		if (mFocus == FOCUS_CHAR_ROW)
 		{
 			if (config->isMappedLike("down", input))
@@ -266,12 +341,25 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 
 void SearchGameListView::textInput(const char* text)
 {
-	if (text[0] == '\0')
+	if (!mIsActive || text[0] == '\0')
 		return;
 
-	mQuery += text;
-	mSearchText.setText(mQuery + "_");
+	mQuery.insert(mCursorPos, text);
+	mCursorPos += strlen(text);
+	updateSearchDisplay();
 	startSearch(mQuery);
+}
+
+void SearchGameListView::onShow()
+{
+	mIsActive = true;
+	GuiComponent::onShow();
+}
+
+void SearchGameListView::onHide()
+{
+	mIsActive = false;
+	GuiComponent::onHide();
 }
 
 void SearchGameListView::render(const Transform4x4f& parentTrans)

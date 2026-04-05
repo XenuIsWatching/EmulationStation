@@ -36,9 +36,12 @@ public:
 
 	void textInput(const char* text) override;
 	void onFocusLost() override;
+	void onShow() override;
+	void onHide() override;
 
 private:
 	void buildGameCache();
+	void updateSearchDisplay();
 	void startSearch(const std::string& query);
 	void cancelSearch();
 	void populateResultsList(const std::vector<FileData*>& results);
@@ -52,6 +55,7 @@ private:
 
 	// Search state
 	std::string mQuery;
+	size_t mCursorPos;   // byte offset of text cursor within mQuery
 	std::vector<FileData*> mAllGames;
 	std::vector<std::string> mLowerNames;
 
@@ -65,6 +69,7 @@ private:
 	// Focus
 	enum FocusTarget { FOCUS_CHAR_ROW, FOCUS_RESULT_LIST };
 	FocusTarget mFocus;
+	bool mIsActive;
 };
 
 #endif // ES_APP_VIEWS_GAME_LIST_SEARCH_GAME_LIST_VIEW_H

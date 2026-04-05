@@ -18,6 +18,8 @@ public:
 
 	void setCharSelectedCallback(const std::function<void(const std::string&)>& cb) { mCharSelectedCb = cb; }
 	void setBackspaceCallback(const std::function<void()>& cb) { mBackspaceCb = cb; }
+	void setCursorLeftCallback(const std::function<void()>& cb) { mCursorLeftCb = cb; }
+	void setCursorRightCallback(const std::function<void()>& cb) { mCursorRightCb = cb; }
 
 	enum Mode { LETTERS, NUMBERS, SYMBOLS };
 	Mode getMode() const { return mMode; }
@@ -37,6 +39,8 @@ private:
 
 	std::function<void(const std::string&)> mCharSelectedCb;
 	std::function<void()> mBackspaceCb;
+	std::function<void()> mCursorLeftCb;
+	std::function<void()> mCursorRightCb;
 
 	std::shared_ptr<Font> mFont;
 	unsigned int mSelectorColor;
@@ -47,6 +51,8 @@ private:
 	static const std::string MODE_SWITCH_SYMBOLS;
 	static const std::string CHAR_SPACE;
 	static const std::string CHAR_BACKSPACE;
+	static const std::string CHAR_CURSOR_LEFT;
+	static const std::string CHAR_CURSOR_RIGHT;
 };
 
 #endif // ES_APP_COMPONENTS_CHARACTER_ROW_COMPONENT_H

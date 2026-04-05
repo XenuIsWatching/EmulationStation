@@ -3,11 +3,13 @@
 #include "renderers/Renderer.h"
 #include "InputConfig.h"
 
-const std::string CharacterRowComponent::MODE_SWITCH_123 = "123";
-const std::string CharacterRowComponent::MODE_SWITCH_ABC = "ABC";
+const std::string CharacterRowComponent::MODE_SWITCH_123     = "123";
+const std::string CharacterRowComponent::MODE_SWITCH_ABC     = "ABC";
 const std::string CharacterRowComponent::MODE_SWITCH_SYMBOLS = "!@#";
-const std::string CharacterRowComponent::CHAR_SPACE = "SPC";
-const std::string CharacterRowComponent::CHAR_BACKSPACE = "<x";
+const std::string CharacterRowComponent::CHAR_SPACE          = "SPC";
+const std::string CharacterRowComponent::CHAR_BACKSPACE      = "<x";
+const std::string CharacterRowComponent::CHAR_CURSOR_LEFT    = "<-";
+const std::string CharacterRowComponent::CHAR_CURSOR_RIGHT   = "->";
 
 CharacterRowComponent::CharacterRowComponent(Window* window)
 	: GuiComponent(window), mMode(LETTERS), mCursor(2), mSelectorColor(0x000050FF), mTextColor(0xFFFFFFFF)
@@ -28,6 +30,8 @@ void CharacterRowComponent::buildCharList()
 		for (char c = 'A'; c <= 'Z'; c++)
 			mChars.push_back(std::string(1, c));
 		mChars.push_back(CHAR_BACKSPACE);
+		mChars.push_back(CHAR_CURSOR_LEFT);
+		mChars.push_back(CHAR_CURSOR_RIGHT);
 		break;
 
 	case NUMBERS:
@@ -37,6 +41,8 @@ void CharacterRowComponent::buildCharList()
 			mChars.push_back(std::string(1, c));
 		mChars.push_back("0");
 		mChars.push_back(CHAR_BACKSPACE);
+		mChars.push_back(CHAR_CURSOR_LEFT);
+		mChars.push_back(CHAR_CURSOR_RIGHT);
 		break;
 
 	case SYMBOLS:
@@ -48,6 +54,8 @@ void CharacterRowComponent::buildCharList()
 				mChars.push_back(std::string(1, syms[i]));
 		}
 		mChars.push_back(CHAR_BACKSPACE);
+		mChars.push_back(CHAR_CURSOR_LEFT);
+		mChars.push_back(CHAR_CURSOR_RIGHT);
 		break;
 	}
 
@@ -98,6 +106,16 @@ bool CharacterRowComponent::input(InputConfig* config, Input input)
 			{
 				if (mBackspaceCb)
 					mBackspaceCb();
+			}
+			else if (selected == CHAR_CURSOR_LEFT)
+			{
+				if (mCursorLeftCb)
+					mCursorLeftCb();
+			}
+			else if (selected == CHAR_CURSOR_RIGHT)
+			{
+				if (mCursorRightCb)
+					mCursorRightCb();
 			}
 			else if (selected == CHAR_SPACE)
 			{
