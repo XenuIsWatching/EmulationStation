@@ -110,7 +110,7 @@ SearchGameListView::~SearchGameListView()
 void SearchGameListView::updateSearchDisplay()
 {
 	// Render cursor as underscore inserted at cursor position
-	std::string display = mQuery.substr(0, mCursorPos) + "_" + mQuery.substr(mCursorPos);
+	std::string display = mQuery.substr(0, mCursorPos) + "|" + mQuery.substr(mCursorPos);
 	mSearchText.setText(display);
 }
 
@@ -190,7 +190,7 @@ void SearchGameListView::populateResultsList(const std::vector<FileData*>& resul
 
 	for (auto game : results)
 	{
-		std::string displayName = game->getName() + " (" + Utils::String::toUpper(game->getSystem()->getName()) + ")";
+		std::string displayName = game->getName() + " [" + Utils::String::toUpper(game->getSystem()->getName()) + "]";
 		mResultList.add(displayName, game, 0);
 	}
 }
