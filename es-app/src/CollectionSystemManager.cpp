@@ -59,6 +59,7 @@ CollectionSystemManager::CollectionSystemManager(Window* window) : mWindow(windo
 	mEditingCollectionSystemData = NULL;
 	mCustomCollectionsBundle = NULL;
 	mRandomCollection = NULL;
+	mSearchSystem = NULL;
 }
 
 CollectionSystemManager::~CollectionSystemManager()
@@ -75,6 +76,10 @@ CollectionSystemManager::~CollectionSystemManager()
 		}
 		delete it->second.system;
 	}
+
+	delete mSearchSystem;
+	mSearchSystem = NULL;
+
 	sInstance = NULL;
 }
 
@@ -136,6 +141,7 @@ bool CollectionSystemManager::saveCustomCollection(SystemData* sys)
 void CollectionSystemManager::loadCollectionSystems(bool async)
 {
 	initAutoCollectionSystems();
+	initSearchSystem();
 	CollectionSystemDecl decl = mCollectionSystemDeclsIndex[CUSTOM_COLL_ID];
 	mCustomCollectionsBundle = createNewCollectionEntry(decl.name, decl, CollectionFlags::NONE);
 	// we will also load custom systems here
@@ -213,6 +219,10 @@ void CollectionSystemManager::updateSystemsList()
 	addEnabledCollectionsToDisplayedSystems(&mAutoCollectionSystemsData, false);
 	// finally, add random
 	addEnabledCollectionsToDisplayedSystems(&mAutoCollectionSystemsData, true);
+
+	// add search system at the end of the carousel
+	if (mSearchSystem)
+		SystemData::sSystemVector.push_back(mSearchSystem);
 
 	// create views for collections, before reload
 	for(auto sysIt = SystemData::sSystemVector.cbegin(); sysIt != SystemData::sSystemVector.cend(); sysIt++)
@@ -671,6 +681,11 @@ void CollectionSystemManager::initAutoCollectionSystems()
 				mRandomCollection = newCol;
 		}
 	}
+}
+
+void CollectionSystemManager::initSearchSystem()
+{
+	mSearchSystem = new SystemData("search", "Search", mCollectionEnvData, "auto-search", true);
 }
 
 // this may come in handy if at any point in time in the future we want to

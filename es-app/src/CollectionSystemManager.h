@@ -91,6 +91,7 @@ public:
 	inline std::map<std::string, CollectionSystemData> getCustomCollectionSystems() { return mCustomCollectionSystemsData; };
 	inline SystemData* getCustomCollectionsBundle() { return mCustomCollectionsBundle; };
 	inline SystemData* getRandomCollection() { return mRandomCollection; };
+	inline SystemData* getSearchSystem() { return mSearchSystem; };
 	std::vector<std::string> getUnusedSystemsFromTheme();
 	SystemData* addNewCustomCollection(std::string name, bool needsSave = false);
 
@@ -150,6 +151,9 @@ private:
 
 	SystemData* mCustomCollectionsBundle;
 	SystemData* mRandomCollection;
+	SystemData* mSearchSystem;
+
+	void initSearchSystem();
 
 	static const int DOUBLE_PRESS_DETECTION_DURATION = 1500; // millis
 };
