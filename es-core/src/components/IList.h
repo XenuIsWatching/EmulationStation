@@ -177,6 +177,15 @@ public:
 		return mCursor;
 	}
 
+	void setCursorIndex(int index)
+	{
+		if (index >= 0 && index < (int)mEntries.size())
+		{
+			mCursor = index;
+			onCursorChanged(CURSOR_STOPPED);
+		}
+	}
+
 	// entry management
 	void add(const Entry& e)
 	{

@@ -233,6 +233,13 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 			// Physical keyboard text-editing keys only active when text input has focus
 			if (config->getDeviceId() == DEVICE_KEYBOARD)
 			{
+				if (input.id == SDLK_UP)
+				{
+					mFocus = FOCUS_RESULT_LIST;
+					mResultList.setCursorIndex(mResultList.size() - 1);
+					updateFocusVisuals();
+					return true;
+				}
 				if (input.id == SDLK_DOWN)
 				{
 					mFocus = FOCUS_RESULT_LIST;
@@ -290,6 +297,14 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 				}
 			}
 
+			if (config->isMappedLike("up", input))
+			{
+				mFocus = FOCUS_RESULT_LIST;
+				mResultList.setCursorIndex(mResultList.size() - 1);
+				updateFocusVisuals();
+				return true;
+			}
+
 			if (config->isMappedLike("down", input))
 			{
 				mFocus = FOCUS_RESULT_LIST;
@@ -308,11 +323,26 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 				// If already at the top, return focus to text input instead of wrapping
 				if (mResultList.getCursorIndex() == 0)
 				{
+					mResultList.stopScrolling(true);
 					mFocus = FOCUS_CHAR_ROW;
 					updateFocusVisuals();
 					return true;
 				}
 				// Otherwise let the list scroll up normally
+				mResultList.input(config, input);
+				return true;
+			}
+
+			if (config->isMappedLike("down", input))
+			{
+				// If already at the bottom, return focus to text input instead of wrapping
+				if (mResultList.size() == 0 || mResultList.getCursorIndex() == (int)mResultList.size() - 1)
+				{
+					mResultList.stopScrolling(true);
+					mFocus = FOCUS_CHAR_ROW;
+					updateFocusVisuals();
+					return true;
+				}
 				mResultList.input(config, input);
 				return true;
 			}
@@ -325,7 +355,7 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 				return true;
 			}
 
-			// Let result list handle other input (up/down scrolling)
+			// Let result list handle other input
 			if (mResultList.input(config, input))
 				return true;
 		}
