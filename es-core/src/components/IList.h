@@ -172,6 +172,11 @@ public:
 		return mViewportTop;
 	}
 
+	int getCursorIndex() const
+	{
+		return mCursor;
+	}
+
 	// entry management
 	void add(const Entry& e)
 	{

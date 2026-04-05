@@ -227,71 +227,71 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 			return true;
 		}
 
-		// Physical keyboard text editing keys
-		if (config->getDeviceId() == DEVICE_KEYBOARD)
-		{
-			if (input.id == SDLK_BACKSPACE)
-			{
-				// Delete character before cursor
-				if (mCursorPos > 0)
-				{
-					size_t prev = Utils::String::prevCursor(mQuery, mCursorPos);
-					mQuery.erase(prev, mCursorPos - prev);
-					mCursorPos = prev;
-				}
-				updateSearchDisplay();
-				startSearch(mQuery);
-				return true;
-			}
-			if (input.id == SDLK_DELETE)
-			{
-				// Delete character at cursor
-				if (mCursorPos < mQuery.size())
-				{
-					size_t next = Utils::String::nextCursor(mQuery, mCursorPos);
-					mQuery.erase(mCursorPos, next - mCursorPos);
-				}
-				updateSearchDisplay();
-				startSearch(mQuery);
-				return true;
-			}
-			if (input.id == SDLK_HOME)
-			{
-				mCursorPos = 0;
-				updateSearchDisplay();
-				return true;
-			}
-			if (input.id == SDLK_END)
-			{
-				mCursorPos = mQuery.size();
-				updateSearchDisplay();
-				return true;
-			}
-			if (input.id == SDLK_LEFT)
-			{
-				if (mCursorPos > 0)
-					mCursorPos = Utils::String::prevCursor(mQuery, mCursorPos);
-				updateSearchDisplay();
-				return true;
-			}
-			if (input.id == SDLK_RIGHT)
-			{
-				if (mCursorPos < mQuery.size())
-					mCursorPos = Utils::String::nextCursor(mQuery, mCursorPos);
-				updateSearchDisplay();
-				return true;
-			}
-		}
-
 		if (mFocus == FOCUS_CHAR_ROW)
 		{
-			if (config->isMappedLike("down", input))
+			// Physical keyboard text-editing keys only active when text input has focus
+			if (config->getDeviceId() == DEVICE_KEYBOARD)
 			{
-				if (mResultList.size() > 0)
+				if (input.id == SDLK_DOWN)
 				{
 					mFocus = FOCUS_RESULT_LIST;
 					return true;
 				}
+				if (input.id == SDLK_BACKSPACE)
+				{
+					if (mCursorPos > 0)
+					{
+						size_t prev = Utils::String::prevCursor(mQuery, mCursorPos);
+						mQuery.erase(prev, mCursorPos - prev);
+						mCursorPos = prev;
+					}
+					updateSearchDisplay();
+					startSearch(mQuery);
+					return true;
+				}
+				if (input.id == SDLK_DELETE)
+				{
+					if (mCursorPos < mQuery.size())
+					{
+						size_t next = Utils::String::nextCursor(mQuery, mCursorPos);
+						mQuery.erase(mCursorPos, next - mCursorPos);
+					}
+					updateSearchDisplay();
+					startSearch(mQuery);
+					return true;
+				}
+				if (input.id == SDLK_HOME)
+				{
+					mCursorPos = 0;
+					updateSearchDisplay();
+					return true;
+				}
+				if (input.id == SDLK_END)
+				{
+					mCursorPos = mQuery.size();
+					updateSearchDisplay();
+					return true;
+				}
+				if (input.id == SDLK_LEFT)
+				{
+					if (mCursorPos > 0)
+						mCursorPos = Utils::String::prevCursor(mQuery, mCursorPos);
+					updateSearchDisplay();
+					return true;
+				}
+				if (input.id == SDLK_RIGHT)
+				{
+					if (mCursorPos < mQuery.size())
+						mCursorPos = Utils::String::nextCursor(mQuery, mCursorPos);
+					updateSearchDisplay();
+					return true;
+				}
+			}
+
+			if (config->isMappedLike("down", input))
+			{
+				mFocus = FOCUS_RESULT_LIST;
+				return true;
 			}
 
 			// Let char row handle left/right/a
@@ -302,30 +302,14 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 		{
 			if (config->isMappedLike("up", input))
 			{
-				// If at top of list, move focus back to char row
-				FileData* cursor = getCursor();
-				if (cursor && mResultList.size() > 0)
+				// If already at the top, return focus to text input instead of wrapping
+				if (mResultList.getCursorIndex() == 0)
 				{
-					// Check if we're at the first entry
-					int viewportTop = mResultList.getViewportTop();
-					// Simple check: if pressing up and cursor is at position 0
-					FileData* first = nullptr;
-					if (mResultList.size() > 0)
-					{
-						// Get the selected entry - if it's the first one, go to char row
-						// We use a slightly different approach: try input, if cursor doesn't change, we're at top
-						int prevCursor = getViewportTop();
-						bool consumed = mResultList.input(config, input);
-						if (getCursor() == cursor)
-						{
-							// Cursor didn't move - we're at the top
-							mFocus = FOCUS_CHAR_ROW;
-							return true;
-						}
-						return consumed;
-					}
+					mFocus = FOCUS_CHAR_ROW;
+					return true;
 				}
-				mFocus = FOCUS_CHAR_ROW;
+				// Otherwise let the list scroll up normally
+				mResultList.input(config, input);
 				return true;
 			}
 
@@ -333,10 +317,7 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 			{
 				FileData* cursor = getCursor();
 				if (cursor && cursor->getType() == GAME)
-				{
 					launch(cursor);
-					return true;
-				}
 				return true;
 			}
 
@@ -357,7 +338,7 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 
 void SearchGameListView::textInput(const char* text)
 {
-	if (!mIsActive || text[0] == '\0')
+	if (!mIsActive || mFocus != FOCUS_CHAR_ROW || text[0] == '\0')
 		return;
 
 	mQuery.insert(mCursorPos, text);
