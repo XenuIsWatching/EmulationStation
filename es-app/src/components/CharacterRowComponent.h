@@ -52,7 +52,7 @@ private:
 	static const std::string MODE_SWITCH_ABC;
 	static const std::string MODE_SWITCH_SYMBOLS;
 	static const std::string CHAR_SPACE;
-	static const std::string CHAR_BACKSPACE;
+	static const std::string CHAR_BACKSPACE;  // ⌫
 	static const std::string CHAR_CURSOR_LEFT;
 	static const std::string CHAR_CURSOR_RIGHT;
 };

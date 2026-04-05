@@ -7,9 +7,9 @@ const std::string CharacterRowComponent::MODE_SWITCH_123     = "123";
 const std::string CharacterRowComponent::MODE_SWITCH_ABC     = "ABC";
 const std::string CharacterRowComponent::MODE_SWITCH_SYMBOLS = "!@#";
 const std::string CharacterRowComponent::CHAR_SPACE          = "SPC";
-const std::string CharacterRowComponent::CHAR_BACKSPACE      = "<x";
-const std::string CharacterRowComponent::CHAR_CURSOR_LEFT    = "<-";
-const std::string CharacterRowComponent::CHAR_CURSOR_RIGHT   = "->";
+const std::string CharacterRowComponent::CHAR_BACKSPACE      = "\xe2\x8c\xab"; // ⌫ U+232B
+const std::string CharacterRowComponent::CHAR_CURSOR_LEFT    = "\xe2\x86\x90"; // ← U+2190
+const std::string CharacterRowComponent::CHAR_CURSOR_RIGHT   = "\xe2\x86\x92"; // → U+2192
 
 CharacterRowComponent::CharacterRowComponent(Window* window)
 	: GuiComponent(window), mMode(LETTERS), mCursor(2), mFocused(true), mSelectorColor(0x000050FF), mTextColor(0xFFFFFFFF)
