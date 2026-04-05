@@ -342,7 +342,8 @@ bool SearchGameListView::input(InputConfig* config, Input input)
 
 void SearchGameListView::textInput(const char* text)
 {
-	if (!mIsActive || mFocus != FOCUS_CHAR_ROW || text[0] == '\0')
+	// Reject if inactive, wrong focus, or control character (backspace, escape, etc.)
+	if (!mIsActive || mFocus != FOCUS_CHAR_ROW || (unsigned char)text[0] < 0x20)
 		return;
 
 	mQuery.insert(mCursorPos, text);
