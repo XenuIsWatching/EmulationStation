@@ -3,6 +3,7 @@
 #define ES_APP_VIEWS_GAME_LIST_SEARCH_GAME_LIST_VIEW_H
 
 #include "components/CharacterRowComponent.h"
+#include "components/ImageComponent.h"
 #include "components/TextComponent.h"
 #include "components/TextListComponent.h"
 #include "views/gamelist/IGameListView.h"
@@ -47,8 +48,13 @@ private:
 	void populateResultsList(const std::vector<FileData*>& results);
 	void addPlaceholder(const std::string& text);
 
-	// UI components
+	// Standard themed elements (mirrors ISimpleGameListView)
+	ImageComponent mBackground;
 	TextComponent mHeaderText;
+	ImageComponent mHeaderImage;
+	std::vector<GuiComponent*> mThemeExtras;
+
+	// Search-specific elements
 	TextComponent mSearchText;
 	CharacterRowComponent mCharRow;
 	TextListComponent<FileData*> mResultList;

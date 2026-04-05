@@ -3,6 +3,7 @@
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
 #include "SystemData.h"
+#include "ThemeData.h"
 #include "Settings.h"
 #include "Log.h"
 #include "utils/StringUtil.h"
@@ -10,37 +11,46 @@
 
 SearchGameListView::SearchGameListView(Window* window, FileData* root)
 	: IGameListView(window, root),
-	  mHeaderText(window), mSearchText(window),
-	  mCharRow(window), mResultList(window),
+	  mBackground(window), mHeaderText(window), mHeaderImage(window),
+	  mSearchText(window), mCharRow(window), mResultList(window),
 	  mCancelFlag(false), mResultsReady(false),
 	  mFocus(FOCUS_CHAR_ROW), mIsActive(false), mCursorPos(0)
 {
 	const float screenW = mSize.x();
 	const float screenH = mSize.y();
 
-	// Header "Search"
+	// Background (themed via "background" element)
+	mBackground.setResize(screenW, screenH);
+	mBackground.setDefaultZIndex(0);
+	addChild(&mBackground);
+
+	// Header logo/text (themed via "logo" / "logoText" elements)
 	mHeaderText.setText("SEARCH");
-	mHeaderText.setSize(screenW, screenH * 0.06f);
+	mHeaderText.setSize(screenW, screenH * 0.185f);
 	mHeaderText.setPosition(0, 0);
 	mHeaderText.setHorizontalAlignment(ALIGN_CENTER);
-	mHeaderText.setColor(0xFFFFFFFF);
-	mHeaderText.setFont(Font::get(FONT_SIZE_LARGE));
 	mHeaderText.setDefaultZIndex(50);
 	addChild(&mHeaderText);
 
-	// Search text display
+	// mHeaderImage is added/removed in onThemeChanged depending on whether the theme has a logo image
+	mHeaderImage.setResize(0, screenH * 0.185f);
+	mHeaderImage.setOrigin(0.5f, 0.0f);
+	mHeaderImage.setPosition(screenW / 2.0f, 0);
+	mHeaderImage.setDefaultZIndex(50);
+
+	// Search text display (default position; overridden in onThemeChanged)
 	mSearchText.setText("");
 	mSearchText.setSize(screenW, screenH * 0.05f);
-	mSearchText.setPosition(0, screenH * 0.06f);
+	mSearchText.setPosition(0, screenH * 0.20f);
 	mSearchText.setHorizontalAlignment(ALIGN_CENTER);
 	mSearchText.setColor(0xCCCCCCFF);
 	mSearchText.setFont(Font::get(FONT_SIZE_MEDIUM));
 	mSearchText.setDefaultZIndex(40);
 	addChild(&mSearchText);
 
-	// Character row
+	// Character row (default position; overridden in onThemeChanged)
 	mCharRow.setSize(screenW, screenH * 0.06f);
-	mCharRow.setPosition(0, screenH * 0.11f);
+	mCharRow.setPosition(0, screenH * 0.26f);
 	mCharRow.setDefaultZIndex(40);
 	addChild(&mCharRow);
 
@@ -88,6 +98,12 @@ SearchGameListView::SearchGameListView(Window* window, FileData* root)
 SearchGameListView::~SearchGameListView()
 {
 	cancelSearch();
+
+	for (auto extra : mThemeExtras)
+	{
+		removeChild(extra);
+		delete extra;
+	}
 }
 
 void SearchGameListView::updateSearchDisplay()
@@ -408,9 +424,38 @@ void SearchGameListView::onFileChanged(FileData* /*file*/, FileChangeType /*chan
 		startSearch(mQuery);
 }
 
-void SearchGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& /*theme*/)
+void SearchGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 {
-	// Search view doesn't heavily rely on theming for now
+	using namespace ThemeFlags;
+
+	mBackground.applyTheme(theme, getName(), "background", ALL);
+	mHeaderImage.applyTheme(theme, getName(), "logo", ALL);
+	mHeaderText.applyTheme(theme, getName(), "logoText", ALL);
+
+	// Swap header image / text based on whether the theme provides a logo image
+	if (mHeaderImage.hasImage())
+	{
+		removeChild(&mHeaderText);
+		addChild(&mHeaderImage);
+	}
+	else
+	{
+		addChild(&mHeaderText);
+		removeChild(&mHeaderImage);
+	}
+
+	// Apply theme to the result list
+	mResultList.applyTheme(theme, getName(), "gamelist", ALL);
+
+	// Position search-specific elements (search text + char row) just above the result list
+	float listY = mResultList.getPosition().y();
+	float rowH  = mSize.y() * 0.06f;
+	mCharRow.setPosition(0, listY - rowH);
+	mCharRow.setSize(mSize.x(), rowH);
+	mSearchText.setPosition(0, listY - rowH * 2.0f);
+	mSearchText.setSize(mSize.x(), rowH);
+
+	sortChildren();
 }
 
 void SearchGameListView::launch(FileData* game)
