@@ -640,7 +640,7 @@ std::vector<HelpPrompt> GuiSearchPopup::getHelpPrompts()
 	{
 		prompts.push_back(HelpPrompt("left/right", "choose"));
 		prompts.push_back(HelpPrompt("a", "type"));
-		prompts.push_back(HelpPrompt("down", "results"));
+		prompts.push_back(HelpPrompt("up/down", "results"));
 	}
 	else
 	{
