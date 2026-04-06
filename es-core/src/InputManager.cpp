@@ -8,6 +8,7 @@
 #include "Window.h"
 #include <pugixml.hpp>
 #include <SDL.h>
+#include <SDL_gamecontroller.h>
 #include <iostream>
 #include <assert.h>
 
@@ -341,6 +342,153 @@ void InputManager::loadDefaultKBConfig()
 	cfg->mapInput("rightshoulder", Input(DEVICE_KEYBOARD, TYPE_KEY, SDLK_RIGHTBRACKET, 1, true));
 }
 
+void InputManager::populateMissingFromSdlMapping(InputConfig* config)
+{
+	if (config->getDeviceId() == DEVICE_KEYBOARD || config->getDeviceId() == DEVICE_CEC)
+		return;
+
+	auto joyIt = mJoysticks.find(config->getDeviceId());
+	if (joyIt == mJoysticks.end())
+		return;
+
+	SDL_JoystickGUID guid = SDL_JoystickGetGUID(joyIt->second);
+	char* mapping = SDL_GameControllerMappingForGUID(guid);
+	if (!mapping)
+		return;
+
+	std::string mappingStr(mapping);
+	SDL_free(mapping);
+
+	LOG(LogInfo) << "InputManager: filling missing inputs from SDL2 GameController mapping for '" << config->getDeviceName() << "'";
+
+	// Skip past guid and name (first two comma-separated fields)
+	size_t pos = 0;
+	for (int skip = 0; skip < 2; skip++)
+	{
+		pos = mappingStr.find(',', pos);
+		if (pos == std::string::npos)
+			return;
+		pos++;
+	}
+
+	// SDL GameController name -> list of ES input names to populate.
+	// For analog axes (leftx, lefty, rightx, righty) two ES names are given:
+	// index 0 = negative direction, index 1 = positive direction.
+	static const std::pair<std::string, std::vector<std::string>> sdlToEs[] = {
+		{ "a",             { "A" } },
+		{ "b",             { "B" } },
+		{ "x",             { "X" } },
+		{ "y",             { "Y" } },
+		{ "leftshoulder",  { "LeftShoulder" } },
+		{ "rightshoulder", { "RightShoulder" } },
+		{ "lefttrigger",   { "LeftTrigger" } },
+		{ "righttrigger",  { "RightTrigger" } },
+		{ "leftstick",     { "LeftThumb" } },
+		{ "rightstick",    { "RightThumb" } },
+		{ "dpup",          { "Up" } },
+		{ "dpdown",        { "Down" } },
+		{ "dpleft",        { "Left" } },
+		{ "dpright",       { "Right" } },
+		{ "start",         { "Start" } },
+		{ "back",          { "Select" } },
+		{ "leftx",         { "LeftAnalogLeft", "LeftAnalogRight" } },
+		{ "lefty",         { "LeftAnalogUp",   "LeftAnalogDown" } },
+		{ "rightx",        { "RightAnalogLeft","RightAnalogRight" } },
+		{ "righty",        { "RightAnalogUp",  "RightAnalogDown" } },
+	};
+
+	// Parse each "sdlname:value" token
+	while (pos < mappingStr.size())
+	{
+		size_t end = mappingStr.find(',', pos);
+		std::string token = mappingStr.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
+		pos = (end == std::string::npos) ? mappingStr.size() : end + 1;
+
+		size_t colon = token.find(':');
+		if (colon == std::string::npos)
+			continue;
+
+		std::string sdlName = token.substr(0, colon);
+		std::string valueStr = token.substr(colon + 1);
+
+		if (sdlName == "platform" || valueStr.empty())
+			continue;
+
+		// Find matching ES names
+		const std::vector<std::string>* esNames = nullptr;
+		for (auto& entry : sdlToEs)
+		{
+			if (entry.first == sdlName)
+			{
+				esNames = &entry.second;
+				break;
+			}
+		}
+		if (!esNames)
+			continue;
+
+		// Parse SDL value string: b0, a0, +a0, -a0, h0.1
+		InputType type;
+		int id, value;
+		bool negativeAxis = false;
+
+		if (valueStr[0] == 'b')
+		{
+			type = TYPE_BUTTON;
+			id = std::stoi(valueStr.substr(1));
+			value = 1;
+		}
+		else if (valueStr[0] == 'h')
+		{
+			type = TYPE_HAT;
+			size_t dot = valueStr.find('.');
+			if (dot == std::string::npos)
+				continue;
+			id = std::stoi(valueStr.substr(1, dot - 1));
+			value = std::stoi(valueStr.substr(dot + 1));
+		}
+		else if (valueStr[0] == 'a' || valueStr[0] == '+' || valueStr[0] == '-')
+		{
+			type = TYPE_AXIS;
+			negativeAxis = (valueStr[0] == '-');
+			bool hasSuffix = (valueStr[0] == '+' || valueStr[0] == '-');
+			id = std::stoi(valueStr.substr(hasSuffix ? 2 : 1));
+			value = negativeAxis ? -1 : 1;
+		}
+		else
+			continue;
+
+		if (esNames->size() == 1)
+		{
+			// Single mapping — only fill if not already configured
+			Input existing;
+			if (!config->getInputByName((*esNames)[0], &existing) || !existing.configured)
+			{
+				Input input(config->getDeviceId(), type, id, value, true);
+				config->mapInput((*esNames)[0], input);
+				LOG(LogInfo) << "  SDL2 filled [" << input.string() << "] -> " << (*esNames)[0];
+			}
+		}
+		else if (esNames->size() == 2 && type == TYPE_AXIS)
+		{
+			// Full axis: negative direction = esNames[0], positive = esNames[1]
+			Input existingNeg, existingPos;
+			if (!config->getInputByName((*esNames)[0], &existingNeg) || !existingNeg.configured)
+			{
+				Input input(config->getDeviceId(), TYPE_AXIS, id, -1, true);
+				config->mapInput((*esNames)[0], input);
+				LOG(LogInfo) << "  SDL2 filled [" << input.string() << "] -> " << (*esNames)[0];
+			}
+			if (!config->getInputByName((*esNames)[1], &existingPos) || !existingPos.configured)
+			{
+				Input input(config->getDeviceId(), TYPE_AXIS, id, 1, true);
+				config->mapInput((*esNames)[1], input);
+				LOG(LogInfo) << "  SDL2 filled [" << input.string() << "] -> " << (*esNames)[1];
+			}
+		}
+	}
+}
+
 void InputManager::writeDeviceConfig(InputConfig* config)
 {
 	assert(initialized());
@@ -395,6 +543,7 @@ void InputManager::writeDeviceConfig(InputConfig* config)
 	if(!root)
 		root = doc.append_child("inputList");
 
+	populateMissingFromSdlMapping(config);
 	config->writeToXML(root);
 	doc.save_file(path.c_str());
 
