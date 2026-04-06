@@ -427,11 +427,23 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 {
 	if (input.value != 0)
 	{
-		// Close on B or RT
-		if (config->isMappedTo("b", input) || config->isMappedTo("righttrigger", input))
+		// Close on B only
+		if (config->isMappedTo("b", input))
 		{
 			cancelSearch();
 			delete this;
+			return true;
+		}
+
+		// RT: move focus back to char row (no-op if already there)
+		if (config->isMappedTo("righttrigger", input))
+		{
+			if (mFocus == FOCUS_RESULT_LIST)
+			{
+				mResultList.stopScrolling(true);
+				mFocus = FOCUS_CHAR_ROW;
+				updateFocusVisuals();
+			}
 			return true;
 		}
 
@@ -666,6 +678,7 @@ std::vector<HelpPrompt> GuiSearchPopup::getHelpPrompts()
 	prompts.push_back(HelpPrompt("b", "close"));
 	if (!UIModeController::getInstance()->isUIModeKid())
 		prompts.push_back(HelpPrompt("start", "menu"));
-	prompts.push_back(HelpPrompt("rt", "exit"));
+	if (mFocus == FOCUS_RESULT_LIST)
+		prompts.push_back(HelpPrompt("rt", "keyboard"));
 	return prompts;
 }
