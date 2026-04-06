@@ -73,7 +73,8 @@ private:
 	size_t mCursorPos;
 	std::vector<FileData*> mAllGames;
 	std::vector<std::string> mLowerNames;
-	std::vector<FileData*> mPlaceholders; // owned; deleted on clear/destroy
+	std::vector<FileData*> mPlaceholders;    // owned; deleted on clear/destroy
+	std::vector<FileData*> mCurrentResults;  // last populated result set (for jump-to)
 
 	// Threading
 	std::thread mSearchThread;

@@ -348,6 +348,7 @@ void GuiSearchPopup::populateResultsList(const std::vector<FileData*>& results)
 	mResultList.clear();
 	for (auto p : mPlaceholders) delete p;
 	mPlaceholders.clear();
+	mCurrentResults.clear();
 
 	if (results.empty())
 	{
@@ -361,6 +362,7 @@ void GuiSearchPopup::populateResultsList(const std::vector<FileData*>& results)
 		if (!mScope)
 			displayName += " [" + Utils::String::toUpper(game->getSystem()->getName()) + "]";
 		mResultList.add(displayName, game, 0);
+		mCurrentResults.push_back(game);
 	}
 }
 
@@ -472,7 +474,11 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 				if (!sys && !SystemData::sSystemVector.empty())
 					sys = SystemData::sSystemVector.front();
 				if (sys)
-					mWindow->pushGui(new GuiGamelistOptions(mWindow, sys));
+				{
+					auto jumpFiles = mCurrentResults;
+					mWindow->pushGui(new GuiGamelistOptions(mWindow, sys, jumpFiles,
+						[this](int idx) { mResultList.setCursorIndex(idx); }));
+				}
 				return true;
 			}
 		}
