@@ -552,6 +552,9 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 					return true;
 				}
 			}
+			if (config->isMappedLike("leftshoulder", input)) { editCursorLeft();  return true; }
+			if (config->isMappedLike("rightshoulder", input)) { editCursorRight(); return true; }
+
 			if (config->isMappedLike("down", input) && !mCurrentResults.empty())
 			{
 				mFocus = FOCUS_RESULT_LIST;
@@ -643,8 +646,10 @@ std::vector<HelpPrompt> GuiSearchPopup::getHelpPrompts()
 	std::vector<HelpPrompt> prompts;
 	if (mFocus == FOCUS_CHAR_ROW)
 	{
+		prompts.push_back(HelpPrompt("lr", "cursor"));
 		prompts.push_back(HelpPrompt("left/right", "choose"));
 		prompts.push_back(HelpPrompt("a", "type"));
+		prompts.push_back(HelpPrompt("x", "backspace"));
 		prompts.push_back(HelpPrompt("up/down", "results"));
 	}
 	else

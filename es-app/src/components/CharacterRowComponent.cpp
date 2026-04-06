@@ -117,6 +117,12 @@ bool CharacterRowComponent::input(InputConfig* config, Input input)
 			scrollStep(1);
 			return true;
 		}
+		else if (config->isMappedTo("x", input))
+		{
+			if (mBackspaceCb)
+				mBackspaceCb();
+			return true;
+		}
 		else if (config->isMappedTo("a", input))
 		{
 			const std::string& selected = mChars[mCursor];
