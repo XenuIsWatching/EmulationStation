@@ -59,7 +59,7 @@ void CharacterRowComponent::buildCharList()
 	if (mCursor >= (int)mChars.size())
 		mCursor = (int)mChars.size() - 1;
 
-	// Cache per-char widths — only changes when chars or font change
+	// Cache per-char widths — rebuilt when chars, font, or size changes
 	const float padding = Math::round(mSize.y() * 0.2f);
 	mCharWidths.clear();
 	mTotalWidth = 0;
@@ -178,6 +178,11 @@ bool CharacterRowComponent::input(InputConfig* config, Input input)
 	return GuiComponent::input(config, input);
 }
 
+void CharacterRowComponent::onSizeChanged()
+{
+	buildCharList();
+}
+
 void CharacterRowComponent::render(const Transform4x4f& parentTrans)
 {
 	Transform4x4f trans = parentTrans * getTransform();
@@ -188,18 +193,9 @@ void CharacterRowComponent::render(const Transform4x4f& parentTrans)
 	const float height = mSize.y();
 	const float padding = Math::round(height * 0.2f);
 
-	// Rebuild cache if height changed (first render or resize)
+	// Rebuild cache if invalidated (shouldn't normally happen at render time)
 	if (mCharWidths.size() != mChars.size())
-	{
-		mCharWidths.clear();
-		mTotalWidth = 0;
-		for (const auto& ch : mChars)
-		{
-			float w = mFont->sizeText(ch).x() + padding * 2;
-			mCharWidths.push_back(w);
-			mTotalWidth += w;
-		}
-	}
+		buildCharList();
 
 	float startX = Math::round((mSize.x() - mTotalWidth) / 2.0f);
 	if (startX < 0)
