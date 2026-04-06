@@ -162,7 +162,21 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	if (!themeSource && !SystemData::sSystemVector.empty())
 		themeSource = SystemData::sSystemVector.front();
 	if (themeSource)
+	{
 		applyTheme(themeSource);
+		// Apply result list theme once here — never re-applied so scrolling doesn't flicker
+		auto theme = themeSource->getTheme();
+		mResultList.applyTheme(theme, "search", "gamelist", ThemeFlags::ALL);
+		const ThemeData::ThemeElement* gamelistElem =
+			theme->getElement("search", "gamelist", "textlist");
+		if (gamelistElem)
+		{
+			if (gamelistElem->has("selectorColor"))
+				mResultListSelectorColor = gamelistElem->get<unsigned int>("selectorColor");
+			if (gamelistElem->has("selectorColorEnd"))
+				mResultListSelectorColorEnd = gamelistElem->get<unsigned int>("selectorColorEnd");
+		}
+	}
 
 	buildGameCache();
 	addPlaceholder("TYPE TO SEARCH...");
@@ -209,22 +223,8 @@ void GuiSearchPopup::applyTheme(SystemData* sys)
 	mLblPublisher.applyTheme(theme, "search", "md_lbl_publisher", ALL);
 	mLblGenre.applyTheme(    theme, "search", "md_lbl_genre",     ALL);
 	mLblPlayers.applyTheme(  theme, "search", "md_lbl_players",   ALL);
-
-	// Result list
-	mResultList.applyTheme(theme, "search", "gamelist", ALL);
-
-	// Re-read themed selector colors
-	const ThemeData::ThemeElement* gamelistElem =
-		theme->getElement("search", "gamelist", "textlist");
-	if (gamelistElem)
-	{
-		if (gamelistElem->has("selectorColor"))
-			mResultListSelectorColor = gamelistElem->get<unsigned int>("selectorColor");
-		if (gamelistElem->has("selectorColorEnd"))
-			mResultListSelectorColorEnd = gamelistElem->get<unsigned int>("selectorColorEnd");
-	}
-
-	updateFocusVisuals();
+	// Note: mResultList theme is applied once in the constructor — not here —
+	// to avoid flickering the favorite icon on every cursor change.
 }
 
 void GuiSearchPopup::updateSearchDisplay()
@@ -252,7 +252,8 @@ void GuiSearchPopup::updateInfoPanel()
 		return;
 	}
 
-	// Dynamic theme reload when cursor moves to a game from a different system
+	// Dynamic theme reload when cursor moves to a game from a different system.
+	// mResultList is intentionally excluded from applyTheme() to avoid flickering.
 	SystemData* sys = file->getSystem();
 	if (sys != mThemeSystem)
 		applyTheme(sys);
