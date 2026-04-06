@@ -12,7 +12,8 @@ const std::string CharacterRowComponent::CHAR_CURSOR_LEFT    = "\xe2\x86\x90"; /
 const std::string CharacterRowComponent::CHAR_CURSOR_RIGHT   = "\xe2\x86\x92"; // → U+2192
 
 CharacterRowComponent::CharacterRowComponent(Window* window)
-	: GuiComponent(window), mMode(LETTERS), mCursor(2), mFocused(true), mSelectorColor(0x000050FF), mTextColor(0xFFFFFFFF)
+	: GuiComponent(window), mMode(LETTERS), mCursor(2), mFocused(true),
+	  mSelectorColor(0x000050FF), mTextColor(0xFFFFFFFF), mTotalWidth(0)
 {
 	mFont = Font::get(FONT_SIZE_MEDIUM);
 	buildCharList();
@@ -29,9 +30,6 @@ void CharacterRowComponent::buildCharList()
 		mChars.push_back(CHAR_SPACE);
 		for (char c = 'A'; c <= 'Z'; c++)
 			mChars.push_back(std::string(1, c));
-		mChars.push_back(CHAR_BACKSPACE);
-		mChars.push_back(CHAR_CURSOR_LEFT);
-		mChars.push_back(CHAR_CURSOR_RIGHT);
 		break;
 
 	case NUMBERS:
@@ -40,9 +38,6 @@ void CharacterRowComponent::buildCharList()
 		for (char c = '1'; c <= '9'; c++)
 			mChars.push_back(std::string(1, c));
 		mChars.push_back("0");
-		mChars.push_back(CHAR_BACKSPACE);
-		mChars.push_back(CHAR_CURSOR_LEFT);
-		mChars.push_back(CHAR_CURSOR_RIGHT);
 		break;
 
 	case SYMBOLS:
@@ -53,14 +48,26 @@ void CharacterRowComponent::buildCharList()
 			for (int i = 0; syms[i]; i++)
 				mChars.push_back(std::string(1, syms[i]));
 		}
-		mChars.push_back(CHAR_BACKSPACE);
-		mChars.push_back(CHAR_CURSOR_LEFT);
-		mChars.push_back(CHAR_CURSOR_RIGHT);
 		break;
 	}
 
+	mChars.push_back(CHAR_BACKSPACE);
+	mChars.push_back(CHAR_CURSOR_LEFT);
+	mChars.push_back(CHAR_CURSOR_RIGHT);
+
 	if (mCursor >= (int)mChars.size())
 		mCursor = (int)mChars.size() - 1;
+
+	// Cache per-char widths — only changes when chars or font change
+	const float padding = Math::round(mSize.y() * 0.2f);
+	mCharWidths.clear();
+	mTotalWidth = 0;
+	for (const auto& ch : mChars)
+	{
+		float w = mFont->sizeText(ch).x() + padding * 2;
+		mCharWidths.push_back(w);
+		mTotalWidth += w;
+	}
 }
 
 bool CharacterRowComponent::input(InputConfig* config, Input input)
@@ -144,18 +151,20 @@ void CharacterRowComponent::render(const Transform4x4f& parentTrans)
 	const float height = mSize.y();
 	const float padding = Math::round(height * 0.2f);
 
-	// Calculate total width needed to center the row
-	float totalWidth = 0;
-	std::vector<float> charWidths;
-	for (const auto& ch : mChars)
+	// Rebuild cache if height changed (first render or resize)
+	if (mCharWidths.size() != mChars.size())
 	{
-		float w = mFont->sizeText(ch).x() + padding * 2;
-		charWidths.push_back(w);
-		totalWidth += w;
+		mCharWidths.clear();
+		mTotalWidth = 0;
+		for (const auto& ch : mChars)
+		{
+			float w = mFont->sizeText(ch).x() + padding * 2;
+			mCharWidths.push_back(w);
+			mTotalWidth += w;
+		}
 	}
 
-	// Start x position - center the row
-	float startX = Math::round((mSize.x() - totalWidth) / 2.0f);
+	float startX = Math::round((mSize.x() - mTotalWidth) / 2.0f);
 	if (startX < 0)
 		startX = 0;
 
@@ -166,16 +175,14 @@ void CharacterRowComponent::render(const Transform4x4f& parentTrans)
 
 	for (int i = 0; i < (int)mChars.size(); i++)
 	{
-		float cellWidth = charWidths[i];
+		float cellWidth = mCharWidths[i];
 
-		// Draw selector background for current item (only when focused)
 		if (mFocused && i == mCursor)
 		{
 			Renderer::drawRect(Math::round(x), 0, Math::round(cellWidth), Math::round(height),
 				mSelectorColor, mSelectorColor);
 		}
 
-		// Build and render text
 		auto textCache = std::unique_ptr<TextCache>(
 			mFont->buildTextCache(mChars[i], Math::round(x + padding), Math::round(textY),
 				(i == mCursor) ? 0xFFFFFFFF : mTextColor));

@@ -44,6 +44,11 @@ private:
 	void updateFocusVisuals();
 	void launch(FileData* game);
 
+	// Edit operations — shared by char row callbacks and physical keyboard handlers
+	void editBackspace();
+	void editCursorLeft();
+	void editCursorRight();
+
 	SystemData* mScope;       // nullptr = all systems
 	SystemData* mThemeSystem; // system whose theme is currently applied
 

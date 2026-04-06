@@ -24,7 +24,7 @@ public:
 	enum Mode { LETTERS, NUMBERS, SYMBOLS };
 	Mode getMode() const { return mMode; }
 
-	void setFont(const std::shared_ptr<Font>& font) { mFont = font; }
+	void setFont(const std::shared_ptr<Font>& font) { mFont = font; buildCharList(); }
 	void setSelectorColor(unsigned int color) { mSelectorColor = color; }
 	void setTextColor(unsigned int color) { mTextColor = color; }
 	void setFocused(bool focused) { mFocused = focused; }
@@ -47,6 +47,9 @@ private:
 	std::shared_ptr<Font> mFont;
 	unsigned int mSelectorColor;
 	unsigned int mTextColor;
+
+	std::vector<float> mCharWidths;
+	float mTotalWidth;
 
 	static const std::string MODE_SWITCH_123;
 	static const std::string MODE_SWITCH_ABC;

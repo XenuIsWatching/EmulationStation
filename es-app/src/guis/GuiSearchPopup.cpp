@@ -59,28 +59,9 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 		startSearch(mQuery);
 	});
 
-	mCharRow.setBackspaceCallback([this]() {
-		if (mCursorPos > 0)
-		{
-			size_t prev = Utils::String::prevCursor(mQuery, mCursorPos);
-			mQuery.erase(prev, mCursorPos - prev);
-			mCursorPos = prev;
-		}
-		updateSearchDisplay();
-		startSearch(mQuery);
-	});
-
-	mCharRow.setCursorLeftCallback([this]() {
-		if (mCursorPos > 0)
-			mCursorPos = Utils::String::prevCursor(mQuery, mCursorPos);
-		updateSearchDisplay();
-	});
-
-	mCharRow.setCursorRightCallback([this]() {
-		if (mCursorPos < mQuery.size())
-			mCursorPos = Utils::String::nextCursor(mQuery, mCursorPos);
-		updateSearchDisplay();
-	});
+	mCharRow.setBackspaceCallback([this]()   { editBackspace(); });
+	mCharRow.setCursorLeftCallback([this]()  { editCursorLeft(); });
+	mCharRow.setCursorRightCallback([this]() { editCursorRight(); });
 
 	// ── result list (left column) ─────────────────────────────────
 	mResultList.setPosition(0, sh * 0.13f);
@@ -269,6 +250,32 @@ void GuiSearchPopup::updateInfoPanel()
 	mPublisher.setValue(file->metadata.get("publisher"));
 	mGenre.setValue(file->metadata.get("genre"));
 	mPlayers.setValue(file->metadata.get("players"));
+}
+
+void GuiSearchPopup::editBackspace()
+{
+	if (mCursorPos > 0)
+	{
+		size_t prev = Utils::String::prevCursor(mQuery, mCursorPos);
+		mQuery.erase(prev, mCursorPos - prev);
+		mCursorPos = prev;
+	}
+	updateSearchDisplay();
+	startSearch(mQuery);
+}
+
+void GuiSearchPopup::editCursorLeft()
+{
+	if (mCursorPos > 0)
+		mCursorPos = Utils::String::prevCursor(mQuery, mCursorPos);
+	updateSearchDisplay();
+}
+
+void GuiSearchPopup::editCursorRight()
+{
+	if (mCursorPos < mQuery.size())
+		mCursorPos = Utils::String::nextCursor(mQuery, mCursorPos);
+	updateSearchDisplay();
 }
 
 void GuiSearchPopup::buildGameCache()
@@ -501,31 +508,16 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 			// Physical keyboard special keys
 			if (config->getDeviceId() == DEVICE_KEYBOARD)
 			{
-				if (input.id == SDLK_UP)
-				{
-					mFocus = FOCUS_RESULT_LIST;
-					mResultList.setCursorIndex(mResultList.size() - 1);
-					updateFocusVisuals();
-					return true;
-				}
 				if (input.id == SDLK_DOWN)
 				{
 					mFocus = FOCUS_RESULT_LIST;
+					mResultList.setCursorIndex(0);
 					updateFocusVisuals();
 					return true;
 				}
-				if (input.id == SDLK_BACKSPACE)
-				{
-					if (mCursorPos > 0)
-					{
-						size_t prev = Utils::String::prevCursor(mQuery, mCursorPos);
-						mQuery.erase(prev, mCursorPos - prev);
-						mCursorPos = prev;
-					}
-					updateSearchDisplay();
-					startSearch(mQuery);
-					return true;
-				}
+				if (input.id == SDLK_BACKSPACE) { editBackspace();   return true; }
+				if (input.id == SDLK_LEFT)      { editCursorLeft();  return true; }
+				if (input.id == SDLK_RIGHT)     { editCursorRight(); return true; }
 				if (input.id == SDLK_DELETE)
 				{
 					if (mCursorPos < mQuery.size())
@@ -549,28 +541,6 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 					updateSearchDisplay();
 					return true;
 				}
-				if (input.id == SDLK_LEFT)
-				{
-					if (mCursorPos > 0)
-						mCursorPos = Utils::String::prevCursor(mQuery, mCursorPos);
-					updateSearchDisplay();
-					return true;
-				}
-				if (input.id == SDLK_RIGHT)
-				{
-					if (mCursorPos < mQuery.size())
-						mCursorPos = Utils::String::nextCursor(mQuery, mCursorPos);
-					updateSearchDisplay();
-					return true;
-				}
-			}
-
-			if (config->isMappedLike("up", input))
-			{
-				mFocus = FOCUS_RESULT_LIST;
-				mResultList.setCursorIndex(mResultList.size() - 1);
-				updateFocusVisuals();
-				return true;
 			}
 			if (config->isMappedLike("down", input))
 			{
