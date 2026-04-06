@@ -93,6 +93,7 @@ private:
 	// Focus
 	enum FocusTarget { FOCUS_CHAR_ROW, FOCUS_RESULT_LIST };
 	FocusTarget mFocus;
+	bool mLastInputWasKeyboard;
 	unsigned int mResultListSelectorColor;
 	unsigned int mResultListSelectorColorEnd;
 };

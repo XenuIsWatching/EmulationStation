@@ -110,10 +110,7 @@ std::shared_ptr<TextureResource> HelpComponent::getIconTexture(const char* name)
 
 	auto pathLookup = ICON_PATH_MAP.find(name);
 	if(pathLookup == ICON_PATH_MAP.cend())
-	{
-		LOG(LogError) << "Unknown help icon \"" << name << "\"!";
-		return nullptr;
-	}
+		return nullptr; // unknown name: text-only prompt, no icon
 	if(!ResourceManager::getInstance()->fileExists(pathLookup->second))
 	{
 		LOG(LogError) << "Help icon \"" << name << "\" - corresponding image file \"" << pathLookup->second << "\" misisng!";

@@ -29,7 +29,7 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	  mLblRating(window), mLblDeveloper(window), mLblPublisher(window),
 	  mLblGenre(window), mLblPlayers(window),
 	  mCursorPos(0), mCancelFlag(false), mResultsReady(false),
-	  mFocus(FOCUS_CHAR_ROW),
+	  mFocus(FOCUS_CHAR_ROW), mLastInputWasKeyboard(false),
 	  mResultListSelectorColor(0x000050FF), mResultListSelectorColorEnd(0x000050FF)
 {
 	const float sw = (float)Renderer::getScreenWidth();
@@ -443,17 +443,73 @@ void GuiSearchPopup::update(int deltaTime)
 
 bool GuiSearchPopup::input(InputConfig* config, Input input)
 {
+	const bool isKeyboard = (config->getDeviceId() == DEVICE_KEYBOARD);
+
+	// Refresh help bar whenever the active input device type changes
+	if (isKeyboard != mLastInputWasKeyboard)
+	{
+		mLastInputWasKeyboard = isKeyboard;
+		updateHelpPrompts();
+	}
+
 	if (input.value != 0)
 	{
-		// Close on B only
-		if (config->isMappedTo("b", input))
+		// ── Keyboard in char row: intercept all keys to avoid button-map conflicts ─
+		// In the result list, keyboard uses the normal button map (same as gamepad).
+		if (isKeyboard && mFocus == FOCUS_CHAR_ROW)
+		{
+			if (input.id == SDLK_ESCAPE)
+			{
+				cancelSearch();
+				delete this;
+				return true;
+			}
+			if (input.id == SDLK_DOWN && !mCurrentResults.empty())
+			{
+				mFocus = FOCUS_RESULT_LIST;
+				mResultList.setCursorIndex(0);
+				updateFocusVisuals();
+				return true;
+			}
+			if (input.id == SDLK_SPACE)
+			{
+				mQuery.insert(mCursorPos, " ");
+				mCursorPos++;
+				updateSearchDisplay();
+				startSearch(mQuery);
+				return true;
+			}
+			if (input.id == SDLK_BACKSPACE) { editBackspace();   return true; }
+			if (input.id == SDLK_LEFT)      { editCursorLeft();  return true; }
+			if (input.id == SDLK_RIGHT)     { editCursorRight(); return true; }
+			if (input.id == SDLK_DELETE)
+			{
+				if (mCursorPos < mQuery.size())
+				{
+					size_t next = Utils::String::nextCursor(mQuery, mCursorPos);
+					mQuery.erase(mCursorPos, next - mCursorPos);
+				}
+				updateSearchDisplay();
+				startSearch(mQuery);
+				return true;
+			}
+			if (input.id == SDLK_HOME) { mCursorPos = 0;             updateSearchDisplay(); return true; }
+			if (input.id == SDLK_END)  { mCursorPos = mQuery.size(); updateSearchDisplay(); return true; }
+			// All other keys: let SDL_TEXTINPUT handle printable chars
+			return false;
+		}
+
+		// ── Button-mapped handling (gamepad + keyboard in result list) ────────────
+
+		// Close on B (or Escape on keyboard — Escape isn't in the button map)
+		if (config->isMappedTo("b", input) || (isKeyboard && input.id == SDLK_ESCAPE))
 		{
 			cancelSearch();
 			delete this;
 			return true;
 		}
 
-		// RT: move focus back to char row (no-op if already there)
+		// RT: move focus back to char row
 		if (config->isMappedTo("righttrigger", input))
 		{
 			if (mFocus == FOCUS_RESULT_LIST)
@@ -465,16 +521,16 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 			return true;
 		}
 
-		// Main menu — always available
+		// Main menu
 		if (config->isMappedTo("start", input) &&
-			!(UIModeController::getInstance()->isUIModeKid() &&
-			  Settings::getInstance()->getBool("DisableKidStartMenu")))
+		    !(UIModeController::getInstance()->isUIModeKid() &&
+		      Settings::getInstance()->getBool("DisableKidStartMenu")))
 		{
 			mWindow->pushGui(new GuiMenu(mWindow));
 			return true;
 		}
 
-		// Favorites + random — only when a real game is selected in the result list
+		// Result list actions
 		if (mFocus == FOCUS_RESULT_LIST)
 		{
 			FileData* selected = (mResultList.size() > 0) ? mResultList.getSelected() : nullptr;
@@ -486,10 +542,8 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 					CollectionSystemManager::get()->toggleGameInCollection(selected);
 				return true;
 			}
-
 			if (config->isMappedTo("x", input))
 			{
-				// Jump to a random entry in the results
 				if (mResultList.size() > 1)
 				{
 					int idx = std::rand() % mResultList.size();
@@ -497,7 +551,6 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 				}
 				return true;
 			}
-
 			if (config->isMappedTo("select", input) && !UIModeController::getInstance()->isUIModeKid())
 			{
 				SystemData* sys = hasGame ? selected->getSystem() : mScope;
@@ -515,53 +568,15 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 
 		if (mFocus == FOCUS_CHAR_ROW)
 		{
-			// Physical keyboard special keys
-			if (config->getDeviceId() == DEVICE_KEYBOARD)
-			{
-				if (input.id == SDLK_DOWN && !mCurrentResults.empty())
-				{
-					mFocus = FOCUS_RESULT_LIST;
-					mResultList.setCursorIndex(0);
-					updateFocusVisuals();
-					return true;
-				}
-				if (input.id == SDLK_BACKSPACE) { editBackspace();   return true; }
-				if (input.id == SDLK_LEFT)      { editCursorLeft();  return true; }
-				if (input.id == SDLK_RIGHT)     { editCursorRight(); return true; }
-				if (input.id == SDLK_DELETE)
-				{
-					if (mCursorPos < mQuery.size())
-					{
-						size_t next = Utils::String::nextCursor(mQuery, mCursorPos);
-						mQuery.erase(mCursorPos, next - mCursorPos);
-					}
-					updateSearchDisplay();
-					startSearch(mQuery);
-					return true;
-				}
-				if (input.id == SDLK_HOME)
-				{
-					mCursorPos = 0;
-					updateSearchDisplay();
-					return true;
-				}
-				if (input.id == SDLK_END)
-				{
-					mCursorPos = mQuery.size();
-					updateSearchDisplay();
-					return true;
-				}
-			}
-			if (config->isMappedLike("leftshoulder", input)) { editCursorLeft();  return true; }
+			// Gamepad only here — keyboard char row is handled above
+			if (config->isMappedLike("leftshoulder", input))  { editCursorLeft();  return true; }
 			if (config->isMappedLike("rightshoulder", input)) { editCursorRight(); return true; }
-
 			if (config->isMappedLike("down", input) && !mCurrentResults.empty())
 			{
 				mFocus = FOCUS_RESULT_LIST;
 				updateFocusVisuals();
 				return true;
 			}
-
 			if (mCharRow.input(config, input))
 				return true;
 		}
@@ -582,7 +597,7 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 			if (config->isMappedLike("down", input))
 			{
 				if (mResultList.size() == 0 ||
-					mResultList.getCursorIndex() == (int)mResultList.size() - 1)
+				    mResultList.getCursorIndex() == (int)mResultList.size() - 1)
 				{
 					mResultList.stopScrolling(true);
 					mFocus = FOCUS_CHAR_ROW;
@@ -603,13 +618,12 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 				return true;
 		}
 	}
-	else
+	else // value == 0 (release)
 	{
-		// Button release — forward to stop scrolling
 		if (mFocus == FOCUS_RESULT_LIST)
 			mResultList.input(config, input);
-		else if (mFocus == FOCUS_CHAR_ROW)
-			mCharRow.input(config, input);
+		else if (mFocus == FOCUS_CHAR_ROW && !isKeyboard)
+			mCharRow.input(config, input); // gamepad only — stops scroll repeat
 	}
 
 	return GuiComponent::input(config, input);
@@ -617,8 +631,8 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 
 void GuiSearchPopup::textInput(const char* text)
 {
-	// Reject control characters (backspace sends both KEYDOWN and TEXTINPUT)
-	if ((unsigned char)text[0] < 0x20)
+	// Reject control characters and space (space is handled via SDLK_SPACE in input())
+	if ((unsigned char)text[0] <= 0x20)
 		return;
 
 	if (mFocus != FOCUS_CHAR_ROW)
@@ -644,29 +658,41 @@ void GuiSearchPopup::render(const Transform4x4f& parentTrans)
 std::vector<HelpPrompt> GuiSearchPopup::getHelpPrompts()
 {
 	std::vector<HelpPrompt> prompts;
-	if (mFocus == FOCUS_CHAR_ROW)
+
+	if (mLastInputWasKeyboard && mFocus == FOCUS_CHAR_ROW)
 	{
-		prompts.push_back(HelpPrompt("lr", "cursor"));
-		prompts.push_back(HelpPrompt("left/right", "choose"));
-		prompts.push_back(HelpPrompt("a", "type"));
-		prompts.push_back(HelpPrompt("x", "backspace"));
+		// Keyboard char row: show keyboard-native hints (no button icons)
 		prompts.push_back(HelpPrompt("up/down", "results"));
+		prompts.push_back(HelpPrompt("", "esc=close"));
 	}
 	else
 	{
-		prompts.push_back(HelpPrompt("up/down", "choose"));
-		prompts.push_back(HelpPrompt("a", "launch"));
-		prompts.push_back(HelpPrompt("x", "random"));
-		if (!UIModeController::getInstance()->isUIModeKid())
+		// Gamepad, or keyboard in result list (uses button map)
+		if (mFocus == FOCUS_CHAR_ROW)
 		{
-			prompts.push_back(HelpPrompt("y", "favorite"));
-			prompts.push_back(HelpPrompt("select", "options"));
+			prompts.push_back(HelpPrompt("lr", "cursor"));
+			prompts.push_back(HelpPrompt("left/right", "choose"));
+			prompts.push_back(HelpPrompt("a", "type"));
+			prompts.push_back(HelpPrompt("x", "backspace"));
+			prompts.push_back(HelpPrompt("up/down", "results"));
 		}
+		else
+		{
+			prompts.push_back(HelpPrompt("up/down", "choose"));
+			prompts.push_back(HelpPrompt("a", "launch"));
+			prompts.push_back(HelpPrompt("x", "random"));
+			if (!UIModeController::getInstance()->isUIModeKid())
+			{
+				prompts.push_back(HelpPrompt("y", "favorite"));
+				prompts.push_back(HelpPrompt("select", "options"));
+			}
+		}
+		prompts.push_back(HelpPrompt("b", "close"));
+		if (!UIModeController::getInstance()->isUIModeKid())
+			prompts.push_back(HelpPrompt("start", "menu"));
+		if (mFocus == FOCUS_RESULT_LIST)
+			prompts.push_back(HelpPrompt("rt", "keyboard"));
 	}
-	prompts.push_back(HelpPrompt("b", "close"));
-	if (!UIModeController::getInstance()->isUIModeKid())
-		prompts.push_back(HelpPrompt("start", "menu"));
-	if (mFocus == FOCUS_RESULT_LIST)
-		prompts.push_back(HelpPrompt("rt", "keyboard"));
+
 	return prompts;
 }
