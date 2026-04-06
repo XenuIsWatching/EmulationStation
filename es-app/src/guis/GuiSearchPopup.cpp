@@ -592,9 +592,11 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 	}
 	else
 	{
-		// Button release — forward to result list to stop scrolling
+		// Button release — forward to stop scrolling
 		if (mFocus == FOCUS_RESULT_LIST)
 			mResultList.input(config, input);
+		else if (mFocus == FOCUS_CHAR_ROW)
+			mCharRow.input(config, input);
 	}
 
 	return GuiComponent::input(config, input);

@@ -13,7 +13,8 @@ const std::string CharacterRowComponent::CHAR_CURSOR_RIGHT   = "\xe2\x86\x92"; /
 
 CharacterRowComponent::CharacterRowComponent(Window* window)
 	: GuiComponent(window), mMode(LETTERS), mCursor(2), mFocused(true),
-	  mSelectorColor(0x000050FF), mTextColor(0xFFFFFFFF), mTotalWidth(0)
+	  mSelectorColor(0x000050FF), mTextColor(0xFFFFFFFF), mTotalWidth(0),
+	  mScrollDir(0), mScrollTimer(0)
 {
 	mFont = Font::get(FONT_SIZE_MEDIUM);
 	buildCharList();
@@ -70,24 +71,50 @@ void CharacterRowComponent::buildCharList()
 	}
 }
 
+void CharacterRowComponent::scrollStep(int dir)
+{
+	if (dir < 0)
+	{
+		if (mCursor > 0) mCursor--;
+		else             mCursor = (int)mChars.size() - 1;
+	}
+	else
+	{
+		if (mCursor < (int)mChars.size() - 1) mCursor++;
+		else                                   mCursor = 0;
+	}
+}
+
+void CharacterRowComponent::update(int deltaTime)
+{
+	if (mScrollDir != 0)
+	{
+		mScrollTimer += deltaTime;
+		while (mScrollTimer >= SCROLL_DELAY_MS)
+		{
+			mScrollTimer -= SCROLL_REPEAT_MS;
+			scrollStep(mScrollDir);
+		}
+	}
+	GuiComponent::update(deltaTime);
+}
+
 bool CharacterRowComponent::input(InputConfig* config, Input input)
 {
 	if (input.value != 0)
 	{
 		if (config->isMappedLike("left", input))
 		{
-			if (mCursor > 0)
-				mCursor--;
-			else
-				mCursor = (int)mChars.size() - 1;
+			mScrollDir   = -1;
+			mScrollTimer = 0;
+			scrollStep(-1);
 			return true;
 		}
 		else if (config->isMappedLike("right", input))
 		{
-			if (mCursor < (int)mChars.size() - 1)
-				mCursor++;
-			else
-				mCursor = 0;
+			mScrollDir   = 1;
+			mScrollTimer = 0;
+			scrollStep(1);
 			return true;
 		}
 		else if (config->isMappedTo("a", input))
@@ -134,6 +161,16 @@ bool CharacterRowComponent::input(InputConfig* config, Input input)
 				if (mCharSelectedCb)
 					mCharSelectedCb(selected);
 			}
+			return true;
+		}
+	}
+
+	if (input.value == 0)
+	{
+		if ((mScrollDir < 0 && config->isMappedLike("left", input)) ||
+		    (mScrollDir > 0 && config->isMappedLike("right", input)))
+		{
+			mScrollDir = 0;
 			return true;
 		}
 	}

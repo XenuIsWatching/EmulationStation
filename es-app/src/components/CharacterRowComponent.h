@@ -14,6 +14,7 @@ public:
 	CharacterRowComponent(Window* window);
 
 	bool input(InputConfig* config, Input input) override;
+	void update(int deltaTime) override;
 	void render(const Transform4x4f& parentTrans) override;
 
 	void setCharSelectedCallback(const std::function<void(const std::string&)>& cb) { mCharSelectedCb = cb; }
@@ -34,9 +35,16 @@ public:
 private:
 	void buildCharList();
 
+	void scrollStep(int dir); // dir: -1 = left, +1 = right
+
+	static const int SCROLL_DELAY_MS    = 500;
+	static const int SCROLL_REPEAT_MS   = 100;
+
 	Mode mMode;
 	int mCursor;
 	bool mFocused;
+	int mScrollDir;    // -1, 0, or 1
+	int mScrollTimer;
 	std::vector<std::string> mChars;
 
 	std::function<void(const std::string&)> mCharSelectedCb;
