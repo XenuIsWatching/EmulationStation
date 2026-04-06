@@ -52,10 +52,13 @@ private:
 	SystemData* mScope;       // nullptr = all systems
 	SystemData* mThemeSystem; // system whose theme is currently applied
 
+	void clearInfoPanel();
+
 	// Search input
 	TextComponent mSearchText;
 	CharacterRowComponent mCharRow;
 	TextListComponent<FileData*> mResultList;
+	TextComponent mListMessage;
 
 	// Metadata display (right panel)
 	ImageComponent mImage;
@@ -78,7 +81,6 @@ private:
 	size_t mCursorPos;
 	std::vector<FileData*> mAllGames;
 	std::vector<std::string> mLowerNames;
-	std::vector<FileData*> mPlaceholders;    // owned; deleted on clear/destroy
 	std::vector<FileData*> mCurrentResults;  // last populated result set (for jump-to)
 
 	// Threading

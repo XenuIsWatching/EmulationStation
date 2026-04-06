@@ -21,7 +21,7 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	: GuiComponent(window),
 	  mScope(scope), mThemeSystem(nullptr),
 	  mSearchText(window), mCharRow(window),
-	  mResultList(window),
+	  mResultList(window), mListMessage(window),
 	  mImage(window), mThumbnail(window),
 	  mDescContainer(window, 1500), mDescription(window),
 	  mRating(window),
@@ -74,6 +74,16 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	});
 	mResultList.setDefaultZIndex(20);
 	addChild(&mResultList);
+
+	// ── list message overlay (shown when list is empty) ───────────
+	mListMessage.setPosition(0, sh * 0.13f);
+	mListMessage.setSize(sw * 0.50f, sh * 0.80f);
+	mListMessage.setHorizontalAlignment(ALIGN_CENTER);
+	mListMessage.setVerticalAlignment(ALIGN_CENTER);
+	mListMessage.setFont(Font::get(FONT_SIZE_SMALL));
+	mListMessage.setColor(0x999999FF);
+	mListMessage.setDefaultZIndex(25);
+	addChild(&mListMessage);
 
 	// ── metadata panel (right column) ────────────────────────────
 	const float rx = sw * 0.53f;
@@ -160,16 +170,13 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	}
 
 	buildGameCache();
-	addPlaceholder("TYPE TO SEARCH...");
+	mListMessage.setText("TYPE TO SEARCH...");
 	updateFocusVisuals();
 }
 
 GuiSearchPopup::~GuiSearchPopup()
 {
 	cancelSearch();
-	for (auto p : mPlaceholders)
-		delete p;
-	mPlaceholders.clear();
 }
 
 void GuiSearchPopup::applyTheme(SystemData* sys)
@@ -313,9 +320,9 @@ void GuiSearchPopup::startSearch(const std::string& query)
 	if (query.empty())
 	{
 		mResultList.clear();
-		for (auto p : mPlaceholders) delete p;
-		mPlaceholders.clear();
+		mCurrentResults.clear();
 		addPlaceholder("TYPE TO SEARCH...");
+		clearInfoPanel();
 		return;
 	}
 
@@ -354,15 +361,16 @@ void GuiSearchPopup::cancelSearch()
 void GuiSearchPopup::populateResultsList(const std::vector<FileData*>& results)
 {
 	mResultList.clear();
-	for (auto p : mPlaceholders) delete p;
-	mPlaceholders.clear();
 	mCurrentResults.clear();
 
 	if (results.empty())
 	{
 		addPlaceholder("NO RESULTS FOUND");
+		clearInfoPanel();
 		return;
 	}
+
+	mListMessage.setText("");
 
 	for (auto game : results)
 	{
@@ -376,17 +384,19 @@ void GuiSearchPopup::populateResultsList(const std::vector<FileData*>& results)
 
 void GuiSearchPopup::addPlaceholder(const std::string& text)
 {
-	// We need a valid system for the placeholder FileData
-	SystemData* sys = mScope;
-	if (!sys && !SystemData::sSystemVector.empty())
-		sys = SystemData::sSystemVector.front();
-	if (!sys)
-		return;
+	mListMessage.setText(text);
+}
 
-	FileData* placeholder = new FileData(PLACEHOLDER, text,
-		sys->getSystemEnvData(), sys);
-	mPlaceholders.push_back(placeholder);
-	mResultList.add(text, placeholder, 0);
+void GuiSearchPopup::clearInfoPanel()
+{
+	mImage.setImage("");
+	mThumbnail.setImage("");
+	mDescription.setText("");
+	mRating.setValue("0");
+	mDeveloper.setValue("");
+	mPublisher.setValue("");
+	mGenre.setValue("");
+	mPlayers.setValue("");
 }
 
 void GuiSearchPopup::updateFocusVisuals()
@@ -508,7 +518,7 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 			// Physical keyboard special keys
 			if (config->getDeviceId() == DEVICE_KEYBOARD)
 			{
-				if (input.id == SDLK_DOWN)
+				if (input.id == SDLK_DOWN && !mCurrentResults.empty())
 				{
 					mFocus = FOCUS_RESULT_LIST;
 					mResultList.setCursorIndex(0);
@@ -542,7 +552,7 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 					return true;
 				}
 			}
-			if (config->isMappedLike("down", input))
+			if (config->isMappedLike("down", input) && !mCurrentResults.empty())
 			{
 				mFocus = FOCUS_RESULT_LIST;
 				updateFocusVisuals();
