@@ -13,6 +13,7 @@
 #include "SystemData.h"
 #include "ThemeData.h"
 #include "Window.h"
+#include <algorithm>
 #include <cstring>
 #include <cstdlib>  // rand()
 
@@ -324,6 +325,9 @@ void GuiSearchPopup::startSearch(const std::string& query)
 			if (mLowerNames[i].find(lowerQuery) != std::string::npos)
 				results.push_back(mAllGames[i]);
 		}
+		std::sort(results.begin(), results.end(), [](FileData* a, FileData* b) {
+			return Utils::String::toLower(a->getName()) < Utils::String::toLower(b->getName());
+		});
 		{
 			std::lock_guard<std::mutex> lock(mResultMutex);
 			mPendingResults = std::move(results);
