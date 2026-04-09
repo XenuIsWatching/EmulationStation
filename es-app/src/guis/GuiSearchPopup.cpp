@@ -31,7 +31,7 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	  mLblGenre(window), mLblPlayers(window),
 	  mCursorPos(0), mCancelFlag(false), mResultsReady(false),
 	  mFocus(FOCUS_CHAR_ROW), mLastInputWasKeyboard(false),
-	  mKeyRepeatKey(0), mKeyRepeatTimer(0),
+	  mKeyRepeatKey(0), mKeyRepeatTimer(0), mShoulderRepeatDir(0), mShoulderRepeatTimer(0),
 	  mResultListSelectorColor(0x000050FF), mResultListSelectorColorEnd(0x000050FF)
 {
 	const float sw = (float)Renderer::getScreenWidth();
@@ -409,7 +409,10 @@ void GuiSearchPopup::updateFocusVisuals()
 	bool charRowFocused = (mFocus == FOCUS_CHAR_ROW);
 	mCharRow.setFocused(charRowFocused);
 	if (!charRowFocused)
-		mKeyRepeatKey = 0; // stop held-key repeat when leaving char row
+	{
+		mKeyRepeatKey = 0;      // stop keyboard held-key repeat
+		mShoulderRepeatDir = 0; // stop gamepad shoulder cursor repeat
+	}
 
 	if (charRowFocused)
 	{
@@ -433,7 +436,7 @@ void GuiSearchPopup::launch(FileData* game)
 
 void GuiSearchPopup::update(int deltaTime)
 {
-	// Keyboard held-key repeat for backspace / delete
+	// Keyboard held-key repeat (backspace / delete / cursor arrows)
 	if (mKeyRepeatKey != 0 && mFocus == FOCUS_CHAR_ROW)
 	{
 		mKeyRepeatTimer += deltaTime;
@@ -451,6 +454,20 @@ void GuiSearchPopup::update(int deltaTime)
 				updateSearchDisplay();
 				startSearch(mQuery);
 			}
+			else if (mKeyRepeatKey == SDLK_LEFT)  editCursorLeft();
+			else if (mKeyRepeatKey == SDLK_RIGHT) editCursorRight();
+		}
+	}
+
+	// Gamepad shoulder button cursor repeat
+	if (mShoulderRepeatDir != 0 && mFocus == FOCUS_CHAR_ROW)
+	{
+		mShoulderRepeatTimer += deltaTime;
+		while (mShoulderRepeatTimer >= KEY_REPEAT_DELAY_MS)
+		{
+			mShoulderRepeatTimer -= KEY_REPEAT_PERIOD_MS;
+			if (mShoulderRepeatDir < 0) editCursorLeft();
+			else                        editCursorRight();
 		}
 	}
 
@@ -513,8 +530,8 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 				editBackspace();
 				return true;
 			}
-			if (input.id == SDLK_LEFT)      { editCursorLeft();  return true; }
-			if (input.id == SDLK_RIGHT)     { editCursorRight(); return true; }
+			if (input.id == SDLK_LEFT)  { mKeyRepeatKey = SDLK_LEFT;  mKeyRepeatTimer = 0; editCursorLeft();  return true; }
+			if (input.id == SDLK_RIGHT) { mKeyRepeatKey = SDLK_RIGHT; mKeyRepeatTimer = 0; editCursorRight(); return true; }
 			if (input.id == SDLK_DELETE)
 			{
 				mKeyRepeatKey = SDLK_DELETE; mKeyRepeatTimer = 0;
@@ -604,8 +621,8 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 		if (mFocus == FOCUS_CHAR_ROW)
 		{
 			// Gamepad only here — keyboard char row is handled above
-			if (config->isMappedLike("leftshoulder", input))  { editCursorLeft();  return true; }
-			if (config->isMappedLike("rightshoulder", input)) { editCursorRight(); return true; }
+			if (config->isMappedLike("leftshoulder", input))  { mShoulderRepeatDir = -1; mShoulderRepeatTimer = 0; editCursorLeft();  return true; }
+			if (config->isMappedLike("rightshoulder", input)) { mShoulderRepeatDir =  1; mShoulderRepeatTimer = 0; editCursorRight(); return true; }
 			if (config->isMappedLike("down", input) && !mCurrentResults.empty())
 			{
 				mFocus = FOCUS_RESULT_LIST;
@@ -663,7 +680,12 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 		else if (mFocus == FOCUS_RESULT_LIST)
 			mResultList.input(config, input);
 		else if (mFocus == FOCUS_CHAR_ROW)
+		{
+			if (mShoulderRepeatDir != 0 &&
+			    (config->isMappedLike("leftshoulder", input) || config->isMappedLike("rightshoulder", input)))
+				mShoulderRepeatDir = 0;
 			mCharRow.input(config, input); // stops gamepad scroll/backspace repeat
+		}
 	}
 
 	return GuiComponent::input(config, input);

@@ -94,8 +94,10 @@ private:
 	enum FocusTarget { FOCUS_CHAR_ROW, FOCUS_RESULT_LIST };
 	FocusTarget mFocus;
 	bool mLastInputWasKeyboard;
-	int  mKeyRepeatKey;   // SDLK key held for repeat, or 0
+	int  mKeyRepeatKey;       // SDLK key held for repeat (backspace/delete/arrows), or 0
 	int  mKeyRepeatTimer;
+	int  mShoulderRepeatDir;  // gamepad shoulder cursor repeat: -1 / 0 / +1
+	int  mShoulderRepeatTimer;
 	static const int KEY_REPEAT_DELAY_MS  = 500;
 	static const int KEY_REPEAT_PERIOD_MS = 80;
 	unsigned int mResultListSelectorColor;
