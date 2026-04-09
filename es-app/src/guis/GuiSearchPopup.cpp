@@ -683,6 +683,7 @@ std::vector<HelpPrompt> GuiSearchPopup::getHelpPrompts()
 		else
 		{
 			prompts.push_back(HelpPrompt("up/down", "choose"));
+			prompts.push_back(HelpPrompt("lr", "page"));
 			prompts.push_back(HelpPrompt("a", "launch"));
 			prompts.push_back(HelpPrompt("x", "random"));
 			if (!UIModeController::getInstance()->isUIModeKid())
