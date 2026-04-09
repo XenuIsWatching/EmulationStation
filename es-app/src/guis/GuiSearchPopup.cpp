@@ -521,6 +521,7 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 				mResultList.stopScrolling(true);
 				mFocus = FOCUS_CHAR_ROW;
 				updateFocusVisuals();
+				SDL_FlushEvent(SDL_TEXTINPUT); // discard text from the key that triggered this
 			}
 			return true;
 		}
