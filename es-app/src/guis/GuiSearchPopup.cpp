@@ -13,6 +13,7 @@
 #include "SystemData.h"
 #include "ThemeData.h"
 #include "Window.h"
+#include <SDL_events.h>
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>  // rand()
@@ -172,6 +173,9 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	buildGameCache();
 	mListMessage.setText("TYPE TO SEARCH...");
 	updateFocusVisuals();
+
+	// Discard any SDL_TEXTINPUT events queued by the key that opened this popup
+	SDL_FlushEvent(SDL_TEXTINPUT);
 }
 
 GuiSearchPopup::~GuiSearchPopup()
