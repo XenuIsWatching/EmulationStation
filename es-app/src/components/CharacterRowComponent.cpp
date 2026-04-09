@@ -60,12 +60,32 @@ void CharacterRowComponent::buildCharList()
 		mCursor = (int)mChars.size() - 1;
 
 	// Cache per-char widths — rebuilt when chars, font, or size changes
-	const float padding = Math::round(mSize.y() * 0.2f);
-	mCharWidths.clear();
-	mTotalWidth = 0;
+	// Compute natural padding, then shrink it if all chars don't fit in mSize.x()
+	float padding = Math::round(mSize.y() * 0.2f);
+
+	// First pass: measure raw text widths
+	std::vector<float> textWidths;
+	float totalTextWidth = 0;
 	for (const auto& ch : mChars)
 	{
-		float w = mFont->sizeText(ch).x() + padding * 2;
+		float tw = mFont->sizeText(ch).x();
+		textWidths.push_back(tw);
+		totalTextWidth += tw;
+	}
+
+	// Shrink padding if needed so everything fits
+	if (mSize.x() > 0)
+	{
+		float maxPadding = (mSize.x() - totalTextWidth) / (2.0f * (float)mChars.size());
+		if (maxPadding < padding)
+			padding = std::max(1.0f, maxPadding);
+	}
+
+	mCharWidths.clear();
+	mTotalWidth = 0;
+	for (float tw : textWidths)
+	{
+		float w = tw + padding * 2;
 		mCharWidths.push_back(w);
 		mTotalWidth += w;
 	}
@@ -212,7 +232,6 @@ void CharacterRowComponent::render(const Transform4x4f& parentTrans)
 		return;
 
 	const float height = mSize.y();
-	const float padding = Math::round(height * 0.2f);
 
 	// Rebuild cache if invalidated (shouldn't normally happen at render time)
 	if (mCharWidths.size() != mChars.size())
@@ -230,6 +249,7 @@ void CharacterRowComponent::render(const Transform4x4f& parentTrans)
 	for (int i = 0; i < (int)mChars.size(); i++)
 	{
 		float cellWidth = mCharWidths[i];
+		float cellPadding = Math::round(cellWidth - mFont->sizeText(mChars[i]).x()) / 2.0f;
 
 		if (mFocused && i == mCursor)
 		{
@@ -238,7 +258,7 @@ void CharacterRowComponent::render(const Transform4x4f& parentTrans)
 		}
 
 		auto textCache = std::unique_ptr<TextCache>(
-			mFont->buildTextCache(mChars[i], Math::round(x + padding), Math::round(textY),
+			mFont->buildTextCache(mChars[i], Math::round(x + cellPadding), Math::round(textY),
 				(i == mCursor) ? 0xFFFFFFFF : mTextColor));
 		mFont->renderTextCache(textCache.get());
 
