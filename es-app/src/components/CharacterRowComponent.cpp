@@ -45,7 +45,7 @@ void CharacterRowComponent::buildCharList()
 		mChars.push_back(MODE_SWITCH_ABC);
 		mChars.push_back(CHAR_SPACE);
 		{
-			const char* syms = "!@#$%^&*()-_+=";
+			const char* syms = "`'\";:~=*+-_,.?!@#$%^&|/\\()[]{}<>";
 			for (int i = 0; syms[i]; i++)
 				mChars.push_back(std::string(1, syms[i]));
 		}
