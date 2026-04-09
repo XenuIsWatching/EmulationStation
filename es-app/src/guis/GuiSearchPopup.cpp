@@ -1,6 +1,10 @@
 #include "guis/GuiSearchPopup.h"
 
 #include "components/RatingComponent.h"
+#ifdef _OMX_
+#include "components/VideoPlayerComponent.h"
+#endif
+#include "components/VideoVlcComponent.h"
 #include "guis/GuiGamelistOptions.h"
 #include "guis/GuiMenu.h"
 #include "renderers/Renderer.h"
@@ -10,6 +14,7 @@
 #include "CollectionSystemManager.h"
 #include "FileData.h"
 #include "Log.h"
+#include "Settings.h"
 #include "SystemData.h"
 #include "ThemeData.h"
 #include "Window.h"
@@ -29,6 +34,10 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	  mDeveloper(window), mPublisher(window), mGenre(window), mPlayers(window),
 	  mLblRating(window), mLblDeveloper(window), mLblPublisher(window),
 	  mLblGenre(window), mLblPlayers(window),
+	  mMarquee(window), mName(window),
+	  mReleaseDate(window), mLastPlayed(window), mPlayCount(window),
+	  mLblReleaseDate(window), mLblLastPlayed(window), mLblPlayCount(window),
+	  mBackground(window),
 	  mCursorPos(0), mCancelFlag(false), mResultsReady(false),
 	  mFocus(FOCUS_CHAR_ROW), mLastInputWasKeyboard(false),
 	  mKeyRepeatKey(0), mKeyRepeatTimer(0), mShoulderRepeatDir(0), mShoulderRepeatTimer(0),
@@ -37,6 +46,10 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	const float sw = (float)Renderer::getScreenWidth();
 	const float sh = (float)Renderer::getScreenHeight();
 	setSize(sw, sh);
+
+	// ── background (optional, theme-driven, rendered first / behind everything) ─
+	mBackground.setDefaultZIndex(0);
+	addChild(&mBackground);
 
 	// ── search text ──────────────────────────────────────────────
 	mSearchText.setText("");
@@ -103,6 +116,36 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	mThumbnail.setDefaultZIndex(35);
 	addChild(&mThumbnail);
 
+	// ── video (off-screen / invisible by default; theme must enable it) ───────
+#ifdef _OMX_
+	if (Settings::getInstance()->getBool("VideoOmxPlayer"))
+		mVideo = new VideoPlayerComponent(window, "");
+	else
+		mVideo = new VideoVlcComponent(window, "");
+#else
+	mVideo = new VideoVlcComponent(window, "");
+#endif
+	mVideo->setOrigin(0.5f, 0.0f);
+	mVideo->setPosition(2.0f, 2.0f);
+	mVideo->setVisible(false);
+	mVideo->setDefaultZIndex(30);
+	addChild(mVideo);
+
+	// ── marquee (off-screen / invisible by default) ───────────────────────────
+	mMarquee.setOrigin(0.5f, 0.0f);
+	mMarquee.setPosition(2.0f, 2.0f);
+	mMarquee.setVisible(false);
+	mMarquee.setDefaultZIndex(35);
+	addChild(&mMarquee);
+
+	// ── name (off-screen by default, theme overrides position) ────────────────
+	mName.setPosition(sw, sh);
+	mName.setDefaultZIndex(40);
+	mName.setColor(0xAAAAAAFF);
+	mName.setFont(Font::get(FONT_SIZE_MEDIUM));
+	mName.setHorizontalAlignment(ALIGN_CENTER);
+	addChild(&mName);
+
 	mDescContainer.setPosition(rx, sh * 0.72f);
 	mDescContainer.setSize(sw * 0.44f, sh * 0.20f);
 	mDescContainer.setAutoScroll(true);
@@ -135,11 +178,16 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	};
 
 	float my = sh * 0.63f;
-	placeLbl(mLblRating,    "Rating: ",    my); placeVal(mRating,    my); my += mh;
-	placeLbl(mLblDeveloper, "Developer: ", my); placeVal(mDeveloper, my); my += mh;
-	placeLbl(mLblGenre,     "Genre: ",     my); placeVal(mGenre,     my); my += mh;
-	placeLbl(mLblPlayers,   "Players: ",   my); placeVal(mPlayers,   my); my += mh;
-	placeLbl(mLblPublisher, "Publisher: ", my); placeVal(mPublisher, my);
+	placeLbl(mLblRating,      "Rating: ",       my); placeVal(mRating,      my); my += mh;
+	placeLbl(mLblDeveloper,   "Developer: ",    my); placeVal(mDeveloper,   my); my += mh;
+	placeLbl(mLblGenre,       "Genre: ",        my); placeVal(mGenre,       my); my += mh;
+	placeLbl(mLblPlayers,     "Players: ",      my); placeVal(mPlayers,     my); my += mh;
+	placeLbl(mLblPublisher,   "Publisher: ",    my); placeVal(mPublisher,   my); my += mh;
+	placeLbl(mLblReleaseDate, "Released: ",     my); placeVal(mReleaseDate, my); my += mh;
+	placeLbl(mLblLastPlayed,  "Last played: ",  my); placeVal(mLastPlayed,  my); my += mh;
+	placeLbl(mLblPlayCount,   "Times played: ", my); placeVal(mPlayCount,   my);
+
+	mLastPlayed.setDisplayRelative(true);
 
 	mDeveloper.setFont(smallFont);
 	mDeveloper.setColor(0xDDDDDDFF);
@@ -149,6 +197,12 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	mPlayers.setColor(0xDDDDDDFF);
 	mPublisher.setFont(smallFont);
 	mPublisher.setColor(0xDDDDDDFF);
+	mReleaseDate.setFont(smallFont);
+	mReleaseDate.setColor(0xDDDDDDFF);
+	mLastPlayed.setFont(smallFont);
+	mLastPlayed.setColor(0xDDDDDDFF);
+	mPlayCount.setFont(smallFont);
+	mPlayCount.setColor(0xDDDDDDFF);
 
 	// Apply theme from scope system (or first available system for all-systems search)
 	SystemData* themeSource = mScope;
@@ -182,6 +236,7 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 GuiSearchPopup::~GuiSearchPopup()
 {
 	cancelSearch();
+	delete mVideo;
 }
 
 void GuiSearchPopup::applyTheme(SystemData* sys)
@@ -193,9 +248,23 @@ void GuiSearchPopup::applyTheme(SystemData* sys)
 	auto theme = sys->getTheme();
 	using namespace ThemeFlags;
 
+	// Background (optional, renders behind everything)
+	mBackground.applyTheme(theme, "search", "background", ALL);
+
 	// Image / thumbnail
-	mImage.applyTheme(theme,     "search", "md_image",     POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mImage.applyTheme(    theme, "search", "md_image",     POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mThumbnail.applyTheme(theme, "search", "md_thumbnail", POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
+
+	// Video (invisible by default; theme must set visible=true to enable)
+	mVideo->applyTheme(theme, "search", "md_video",
+		POSITION | SIZE | DELAY | Z_INDEX | ROTATION | VISIBLE);
+
+	// Marquee
+	mMarquee.applyTheme(theme, "search", "md_marquee",
+		POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
+
+	// Name
+	mName.applyTheme(theme, "search", "md_name", ALL);
 
 	// Description
 	mDescContainer.applyTheme(theme, "search", "md_description", POSITION | SIZE | Z_INDEX | VISIBLE);
@@ -204,18 +273,29 @@ void GuiSearchPopup::applyTheme(SystemData* sys)
 		ALL ^ (POSITION | SIZE | ORIGIN | TEXT | ROTATION));
 
 	// Metadata values
-	mRating.applyTheme(   theme, "search", "md_rating",    ALL ^ TEXT);
-	mDeveloper.applyTheme(theme, "search", "md_developer", ALL ^ TEXT);
-	mPublisher.applyTheme(theme, "search", "md_publisher", ALL ^ TEXT);
-	mGenre.applyTheme(    theme, "search", "md_genre",     ALL ^ TEXT);
-	mPlayers.applyTheme(  theme, "search", "md_players",   ALL ^ TEXT);
+	mRating.applyTheme(     theme, "search", "md_rating",      ALL ^ TEXT);
+	mDeveloper.applyTheme(  theme, "search", "md_developer",   ALL ^ TEXT);
+	mPublisher.applyTheme(  theme, "search", "md_publisher",   ALL ^ TEXT);
+	mGenre.applyTheme(      theme, "search", "md_genre",       ALL ^ TEXT);
+	mPlayers.applyTheme(    theme, "search", "md_players",     ALL ^ TEXT);
+	mReleaseDate.applyTheme(theme, "search", "md_releasedate", ALL ^ TEXT);
+	mLastPlayed.applyTheme( theme, "search", "md_lastplayed",  ALL ^ TEXT);
+	mPlayCount.applyTheme(  theme, "search", "md_playcount",   ALL ^ TEXT);
 
 	// Labels
-	mLblRating.applyTheme(   theme, "search", "md_lbl_rating",    ALL);
-	mLblDeveloper.applyTheme(theme, "search", "md_lbl_developer", ALL);
-	mLblPublisher.applyTheme(theme, "search", "md_lbl_publisher", ALL);
-	mLblGenre.applyTheme(    theme, "search", "md_lbl_genre",     ALL);
-	mLblPlayers.applyTheme(  theme, "search", "md_lbl_players",   ALL);
+	mLblRating.applyTheme(     theme, "search", "md_lbl_rating",      ALL);
+	mLblDeveloper.applyTheme(  theme, "search", "md_lbl_developer",   ALL);
+	mLblPublisher.applyTheme(  theme, "search", "md_lbl_publisher",   ALL);
+	mLblGenre.applyTheme(      theme, "search", "md_lbl_genre",       ALL);
+	mLblPlayers.applyTheme(    theme, "search", "md_lbl_players",     ALL);
+	mLblReleaseDate.applyTheme(theme, "search", "md_lbl_releasedate", ALL);
+	mLblLastPlayed.applyTheme( theme, "search", "md_lbl_lastplayed",  ALL);
+	mLblPlayCount.applyTheme(  theme, "search", "md_lbl_playcount",   ALL);
+
+	// Layout elements (no-op if element not defined in theme)
+	mSearchText.applyTheme( theme, "search", "searchtext",  ALL ^ TEXT);
+	mListMessage.applyTheme(theme, "search", "listmessage", ALL ^ TEXT);
+
 	// Note: mResultList theme is applied once in the constructor — not here —
 	// to avoid flickering the favorite icon on every cursor change.
 }
@@ -234,14 +314,7 @@ void GuiSearchPopup::updateInfoPanel()
 	FileData* file = mResultList.getSelected();
 	if (!file || file->getType() != GAME)
 	{
-		mImage.setImage("");
-		mThumbnail.setImage("");
-		mDescription.setText("");
-		mRating.setValue("0");
-		mDeveloper.setValue("");
-		mPublisher.setValue("");
-		mGenre.setValue("");
-		mPlayers.setValue("");
+		clearInfoPanel();
 		return;
 	}
 
@@ -253,6 +326,17 @@ void GuiSearchPopup::updateInfoPanel()
 
 	mImage.setImageAsync(file->getImagePath());
 	mThumbnail.setImageAsync(file->getThumbnailPath());
+
+	if (mVideo->isVisible())
+	{
+		if (!mVideo->setVideo(file->getVideoPath()))
+			mVideo->setDefaultVideo();
+		mVideo->setImageAsync(file->getThumbnailPath());
+	}
+
+	mMarquee.setImageAsync(file->getMarqueePath());
+	mName.setText(file->getName());
+
 	mDescription.setText(file->metadata.get("desc"));
 	mDescription.setSize(mDescription.getSize().x(), 0); // auto-height
 	mDescContainer.reset();
@@ -262,6 +346,9 @@ void GuiSearchPopup::updateInfoPanel()
 	mPublisher.setValue(file->metadata.get("publisher"));
 	mGenre.setValue(file->metadata.get("genre"));
 	mPlayers.setValue(file->metadata.get("players"));
+	mReleaseDate.setValue(file->metadata.get("releasedate"));
+	mLastPlayed.setValue(file->metadata.get("lastplayed"));
+	mPlayCount.setValue(file->metadata.get("playcount"));
 }
 
 void GuiSearchPopup::editBackspace()
@@ -396,12 +483,19 @@ void GuiSearchPopup::clearInfoPanel()
 {
 	mImage.setImage("");
 	mThumbnail.setImage("");
+	mVideo->setVideo("");
+	mVideo->setImage("");
+	mMarquee.setImage("");
+	mName.setText("");
 	mDescription.setText("");
 	mRating.setValue("0");
 	mDeveloper.setValue("");
 	mPublisher.setValue("");
 	mGenre.setValue("");
 	mPlayers.setValue("");
+	mReleaseDate.setValue("");
+	mLastPlayed.setValue("");
+	mPlayCount.setValue("");
 }
 
 void GuiSearchPopup::updateFocusVisuals()
@@ -483,6 +577,7 @@ void GuiSearchPopup::update(int deltaTime)
 		updateInfoPanel();
 	}
 
+	mVideo->update(deltaTime);
 	GuiComponent::update(deltaTime);
 }
 

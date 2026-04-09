@@ -3,11 +3,13 @@
 #define ES_APP_GUIS_GUI_SEARCH_POPUP_H
 
 #include "components/CharacterRowComponent.h"
+#include "components/DateTimeComponent.h"
 #include "components/ImageComponent.h"
 #include "components/ScrollableContainer.h"
 #include "components/TextComponent.h"
 #include "components/TextListComponent.h"
 #include "components/RatingComponent.h"
+#include "components/VideoComponent.h"
 #include "GuiComponent.h"
 #include <atomic>
 #include <mutex>
@@ -61,20 +63,32 @@ private:
 	TextComponent mListMessage;
 
 	// Metadata display (right panel)
-	ImageComponent mImage;
-	ImageComponent mThumbnail;
+	ImageComponent    mImage;
+	ImageComponent    mThumbnail;
 	ScrollableContainer mDescContainer;
-	TextComponent mDescription;
-	RatingComponent mRating;
-	TextComponent mDeveloper;
-	TextComponent mPublisher;
-	TextComponent mGenre;
-	TextComponent mPlayers;
-	TextComponent mLblRating;
-	TextComponent mLblDeveloper;
-	TextComponent mLblPublisher;
-	TextComponent mLblGenre;
-	TextComponent mLblPlayers;
+	TextComponent     mDescription;
+	RatingComponent   mRating;
+	TextComponent     mDeveloper;
+	TextComponent     mPublisher;
+	TextComponent     mGenre;
+	TextComponent     mPlayers;
+	TextComponent     mLblRating;
+	TextComponent     mLblDeveloper;
+	TextComponent     mLblPublisher;
+	TextComponent     mLblGenre;
+	TextComponent     mLblPlayers;
+
+	// Extended metadata (theme-driven, off-screen by default)
+	VideoComponent*   mVideo;
+	ImageComponent    mMarquee;
+	TextComponent     mName;
+	DateTimeComponent mReleaseDate;
+	DateTimeComponent mLastPlayed;
+	TextComponent     mPlayCount;
+	TextComponent     mLblReleaseDate;
+	TextComponent     mLblLastPlayed;
+	TextComponent     mLblPlayCount;
+	ImageComponent    mBackground;
 
 	// Search state
 	std::string mQuery;
