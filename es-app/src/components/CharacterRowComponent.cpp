@@ -14,7 +14,7 @@ const std::string CharacterRowComponent::CHAR_CURSOR_RIGHT   = "\xe2\x86\x92"; /
 CharacterRowComponent::CharacterRowComponent(Window* window)
 	: GuiComponent(window), mMode(LETTERS), mCursor(2), mFocused(true),
 	  mSelectorColor(0x000050FF), mTextColor(0xFFFFFFFF), mTotalWidth(0),
-	  mScrollDir(0), mScrollTimer(0)
+	  mScrollDir(0), mScrollTimer(0), mBackspaceHeld(false), mBackspaceTimer(0)
 {
 	mFont = Font::get(FONT_SIZE_MEDIUM);
 	buildCharList();
@@ -96,6 +96,15 @@ void CharacterRowComponent::update(int deltaTime)
 			scrollStep(mScrollDir);
 		}
 	}
+	if (mBackspaceHeld)
+	{
+		mBackspaceTimer += deltaTime;
+		while (mBackspaceTimer >= SCROLL_DELAY_MS)
+		{
+			mBackspaceTimer -= SCROLL_REPEAT_MS;
+			if (mBackspaceCb) mBackspaceCb();
+		}
+	}
 	GuiComponent::update(deltaTime);
 }
 
@@ -119,8 +128,9 @@ bool CharacterRowComponent::input(InputConfig* config, Input input)
 		}
 		else if (config->isMappedTo("x", input))
 		{
-			if (mBackspaceCb)
-				mBackspaceCb();
+			mBackspaceHeld = true;
+			mBackspaceTimer = 0;
+			if (mBackspaceCb) mBackspaceCb();
 			return true;
 		}
 		else if (config->isMappedTo("a", input))
@@ -173,6 +183,11 @@ bool CharacterRowComponent::input(InputConfig* config, Input input)
 
 	if (input.value == 0)
 	{
+		if (mBackspaceHeld && config->isMappedTo("x", input))
+		{
+			mBackspaceHeld = false;
+			return true;
+		}
 		if ((mScrollDir < 0 && config->isMappedLike("left", input)) ||
 		    (mScrollDir > 0 && config->isMappedLike("right", input)))
 		{

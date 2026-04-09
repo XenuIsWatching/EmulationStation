@@ -46,6 +46,8 @@ private:
 	bool mFocused;
 	int mScrollDir;    // -1, 0, or 1
 	int mScrollTimer;
+	bool mBackspaceHeld;
+	int mBackspaceTimer;
 	std::vector<std::string> mChars;
 
 	std::function<void(const std::string&)> mCharSelectedCb;

@@ -94,6 +94,10 @@ private:
 	enum FocusTarget { FOCUS_CHAR_ROW, FOCUS_RESULT_LIST };
 	FocusTarget mFocus;
 	bool mLastInputWasKeyboard;
+	int  mKeyRepeatKey;   // SDLK key held for repeat, or 0
+	int  mKeyRepeatTimer;
+	static const int KEY_REPEAT_DELAY_MS  = 500;
+	static const int KEY_REPEAT_PERIOD_MS = 80;
 	unsigned int mResultListSelectorColor;
 	unsigned int mResultListSelectorColorEnd;
 };

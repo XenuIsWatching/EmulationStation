@@ -31,6 +31,7 @@ GuiSearchPopup::GuiSearchPopup(Window* window, SystemData* scope)
 	  mLblGenre(window), mLblPlayers(window),
 	  mCursorPos(0), mCancelFlag(false), mResultsReady(false),
 	  mFocus(FOCUS_CHAR_ROW), mLastInputWasKeyboard(false),
+	  mKeyRepeatKey(0), mKeyRepeatTimer(0),
 	  mResultListSelectorColor(0x000050FF), mResultListSelectorColorEnd(0x000050FF)
 {
 	const float sw = (float)Renderer::getScreenWidth();
@@ -407,6 +408,8 @@ void GuiSearchPopup::updateFocusVisuals()
 {
 	bool charRowFocused = (mFocus == FOCUS_CHAR_ROW);
 	mCharRow.setFocused(charRowFocused);
+	if (!charRowFocused)
+		mKeyRepeatKey = 0; // stop held-key repeat when leaving char row
 
 	if (charRowFocused)
 	{
@@ -430,6 +433,27 @@ void GuiSearchPopup::launch(FileData* game)
 
 void GuiSearchPopup::update(int deltaTime)
 {
+	// Keyboard held-key repeat for backspace / delete
+	if (mKeyRepeatKey != 0 && mFocus == FOCUS_CHAR_ROW)
+	{
+		mKeyRepeatTimer += deltaTime;
+		while (mKeyRepeatTimer >= KEY_REPEAT_DELAY_MS)
+		{
+			mKeyRepeatTimer -= KEY_REPEAT_PERIOD_MS;
+			if (mKeyRepeatKey == SDLK_BACKSPACE)
+			{
+				editBackspace();
+			}
+			else if (mKeyRepeatKey == SDLK_DELETE && mCursorPos < mQuery.size())
+			{
+				size_t next = Utils::String::nextCursor(mQuery, mCursorPos);
+				mQuery.erase(mCursorPos, next - mCursorPos);
+				updateSearchDisplay();
+				startSearch(mQuery);
+			}
+		}
+	}
+
 	if (mResultsReady.load())
 	{
 		std::vector<FileData*> results;
@@ -483,11 +507,17 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 				startSearch(mQuery);
 				return true;
 			}
-			if (input.id == SDLK_BACKSPACE) { editBackspace();   return true; }
+			if (input.id == SDLK_BACKSPACE)
+			{
+				mKeyRepeatKey = SDLK_BACKSPACE; mKeyRepeatTimer = 0;
+				editBackspace();
+				return true;
+			}
 			if (input.id == SDLK_LEFT)      { editCursorLeft();  return true; }
 			if (input.id == SDLK_RIGHT)     { editCursorRight(); return true; }
 			if (input.id == SDLK_DELETE)
 			{
+				mKeyRepeatKey = SDLK_DELETE; mKeyRepeatTimer = 0;
 				if (mCursorPos < mQuery.size())
 				{
 					size_t next = Utils::String::nextCursor(mQuery, mCursorPos);
@@ -625,10 +655,15 @@ bool GuiSearchPopup::input(InputConfig* config, Input input)
 	}
 	else // value == 0 (release)
 	{
-		if (mFocus == FOCUS_RESULT_LIST)
+		if (isKeyboard && mFocus == FOCUS_CHAR_ROW)
+		{
+			if ((int)input.id == mKeyRepeatKey)
+				mKeyRepeatKey = 0;
+		}
+		else if (mFocus == FOCUS_RESULT_LIST)
 			mResultList.input(config, input);
-		else if (mFocus == FOCUS_CHAR_ROW && !isKeyboard)
-			mCharRow.input(config, input); // gamepad only — stops scroll repeat
+		else if (mFocus == FOCUS_CHAR_ROW)
+			mCharRow.input(config, input); // stops gamepad scroll/backspace repeat
 	}
 
 	return GuiComponent::input(config, input);
