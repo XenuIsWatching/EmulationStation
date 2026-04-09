@@ -28,7 +28,8 @@ static const std::map<std::string, const char*> ICON_PATH_MAP {
 	{ "rt", ":/help/button_rt.svg" },
 	{ "lr", ":/help/button_lr.svg" },
 	{ "start", ":/help/button_start.svg" },
-	{ "select", ":/help/button_select.svg" }
+	{ "select", ":/help/button_select.svg" },
+	{ "esc", ":/help/button_esc_key.svg" }
 };
 
 HelpComponent::HelpComponent(Window* window) : GuiComponent(window)

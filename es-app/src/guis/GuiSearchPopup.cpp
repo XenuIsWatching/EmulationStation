@@ -818,9 +818,9 @@ std::vector<HelpPrompt> GuiSearchPopup::getHelpPrompts()
 
 	if (mLastInputWasKeyboard && mFocus == FOCUS_CHAR_ROW)
 	{
-		// Keyboard char row: show keyboard-native hints (no button icons)
+		// Keyboard char row: show keyboard-native hints
 		prompts.push_back(HelpPrompt("up/down", "results"));
-		prompts.push_back(HelpPrompt("", "esc=close"));
+		prompts.push_back(HelpPrompt("esc", "close"));
 	}
 	else
 	{
